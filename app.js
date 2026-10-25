@@ -15,13 +15,13 @@ const VIEWS = [["today","Today"],["lists","Lists"],["dinners","Dinners"],["hosti
 const RCATS = ["Breakfast","Appetizers","Mains","Sides","Desserts","Drinks","For the pups"];
 const LIST_ALIASES = {grocery:["grocery","groceries","store","supermarket","food shop","shopping"], costco:["costco","bulk","warehouse"], todo:["to-do","todo","to do","tasks","errands","list"], ideas:["ideas","meal ideas","dinner ideas","meals","dinners"]};
 
-const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], checks:{}, dinners:{}};
+const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], checks:{}, dinners:{}};
 const U = {view:"today", wk:null, sub:"all", htab:"plan", catF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All"};
 let db = null, sample = null, ready = false, noDb = false, seen = 0;
 const ls = {get:(k) => { try { return localStorage.getItem(k); } catch(e) { return null; } }, set:(k,v) => { try { localStorage.setItem(k,v); } catch(e) {} }};
-U.view = ["today","lists","dinners","hosting","cookbook"].includes(ls.get("hph_view")) ? ls.get("hph_view") : "today";
+U.view = ["today","lists","dinners","hosting","cookbook","plans"].includes(ls.get("hph_view")) ? ls.get("hph_view") : "today";
 U.wk = ls.get("hph_wk"); U.htab = ls.get("hph_htab") || "plan"; U.listId = ls.get("hph_list");
-if (/^#(today|lists|dinners|hosting|cookbook)$/.test(location.hash)) U.view = location.hash.slice(1);
+if (/^#(today|lists|dinners|hosting|cookbook|plans)$/.test(location.hash)) U.view = location.hash.slice(1);
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -90,6 +90,14 @@ const nextEvent = () => S.events.filter(e => daysTo(e.date) >= 0).sort(byDate)[0
 const hk = t => { let h = 5381; for (const ch of t) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0; return h.toString(36); };
 const ck = (on, act, id, label) => `<button class="ck" role="checkbox" aria-checked="${!!on}" aria-label="${esc(label)}" data-act="${act}" data-id="${esc(id)}">${on ? CHECK : ""}</button>`;
 const del = (col, id) => `<button class="x ${U.armed===col+id ? "arm" : ""}" data-act="del" data-col="${col}" data-id="${esc(id)}" aria-label="Remove">${U.armed===col+id ? "Remove" : "×"}</button>`;
+const recipeFor = title => { const n = norm(title); if (!n) return ""; return Object.keys(R).find(k => norm(R[k].title) === n) || Object.keys(R).find(k => n.includes(norm(R[k].title)) || norm(R[k].title).includes(n)) || ""; };
+const recipeTime = k => { const r = R[k]; if (!r) return ""; const m = r.meta.map(x => x.split(": ")); const get = l => (m.find(x => x[0] === l) || [])[1] || ""; const cook = get("Cook") || get("Roast") || get("Steam") || get("Chill") || get("Rest"); const prep = get("Prep"); return [prep && "Prep " + prep, cook && ((get("Cook") ? "Cook " : "") + cook)].filter(Boolean).join(" · "); };
+const linkLabel = u => { try { const h = new URL(u).hostname.replace(/^www\./,""); return /pinterest/.test(h) ? "Pinterest" : /instagram/.test(h) ? "Instagram" : /tiktok/.test(h) ? "TikTok" : /youtu/.test(h) ? "YouTube" : h.split(".")[0].replace(/^./, c => c.toUpperCase()); } catch(e) { return "Link"; } };
+const safeUrl = u => /^https?:\/\//i.test(String(u||"").trim()) ? String(u).trim() : "";
+const timePill = t => t ? `<span class="pill time">${esc(t)}</span>` : "";
+const shortTime = (t, k) => t || (k && R[k] ? (((R[k].meta.find(x => /^(Cook|Roast|Steam|Chill|Bake):/.test(x)) || "").split(": ")[1] || "").replace(/^about /i, "")) : "");
+const linkPill = u => safeUrl(u) ? `<a class="pill link ext" href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${esc(linkLabel(u))} ↗</a>` : "";
+const plansOn = d => S.plans.filter(p => p.date && p.date <= d && (p.endDate || p.date) >= d).sort((a,b) => (a.time||"").localeCompare(b.time||""));
 const recipeOptions = sel => `<option value="">From the cookbook (optional)</option>` + Object.entries(R).sort((a,b) => a[1].title.localeCompare(b[1].title)).map(([k,v]) => `<option value="${k}" ${sel===k?"selected":""}>${esc(v.title)}</option>`).join("");
 
 /* ───────────────────────── Render shell ───────────────────────── */
@@ -101,7 +109,7 @@ function render(){
   let body;
   if (!ready) body = `<p class="status">Loading the house…</p>`;
   else if (noDb) body = `<div class="empty"><b>Sign in to claude.ai</b>Your lists, dinners and hosting plans live in the shared database. Sign in and reopen this page.</div>`;
-  else body = ({today:vToday, lists:vLists, dinners:vDinners, hosting:vHosting, cookbook:vCookbook})[U.view]();
+  else body = ({today:vToday, lists:vLists, dinners:vDinners, hosting:vHosting, cookbook:vCookbook, plans:vPlans})[U.view]();
   const sc = $("#main");
   setHTML(sc, `<div class="wrap">${body}</div>`);
   if (render.k !== key) { sc.scrollTop = 0; render.k = key; }
@@ -112,7 +120,8 @@ function vToday(){
   const t = todayISO(), h = new Date().getHours();
   const greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   const dn = S.dinners[t], ws = weekStart(t);
-  const hero = dn && dn.title ? `<p class="eyebrow">Tonight</p><div class="big">${esc(dn.title)}</div>${dn.note ? `<div class="muted">${esc(dn.note)}</div>` : ""}
+  const dnTime = dn && (dn.time || (dn.recipe && recipeTime(dn.recipe)));
+  const hero = dn && dn.title ? `<p class="eyebrow">Tonight</p><div class="big">${esc(dn.title)}</div>${dn.note ? `<div class="muted">${esc(dn.note)}</div>` : ""}${dnTime || (dn && dn.link) ? `<div>${timePill(dnTime)}${linkPill(dn.link)}</div>` : ""}
       <div class="inline">${dn.recipe && R[dn.recipe] ? `<button class="btn sm" data-act="cook" data-id="${dn.recipe}">Cook it</button><button class="btn sm ghost" data-act="recipe" data-id="${dn.recipe}">Recipe</button>` : ""}<button class="btn sm quiet" data-act="editdinner" data-id="${t}">Change</button></div>`
     : `<p class="eyebrow">Tonight</p><div class="big" style="color:var(--faint)">Nothing planned yet</div><div class="inline"><button class="btn sm" data-act="editdinner" data-id="${t}">Plan dinner</button></div>`;
   const strip = `<div class="weekstrip">${[0,1,2,3,4,5,6].map(i => { const d = addDays(ws,i), m = S.dinners[d]; return `<button class="${d===t?"now":""}" data-act="editdinner" data-id="${d}"><b>${fmt(d,{weekday:"short"})}</b><span>${m && m.title ? esc(m.title) : "–"}</span></button>`; }).join("")}</div>`;
@@ -124,10 +133,30 @@ function vToday(){
       <div class="stats"><span><b>${done}/${tasks.length}</b> to-dos done</span><span><b>${yes}/${g.length}</b> guests confirmed</span></div><div class="bar"><i style="width:${tasks.length ? Math.round(done/tasks.length*100) : 0}%"></i></div></button>`; }
   const due = S.tasks.filter(x => !x.done && x.date && daysTo(x.date) <= 7).sort((a,b) => byDate(a,b) || (a.t||"99").localeCompare(b.t||"99")).slice(0,8);
   const dueHtml = due.length ? `<div class="card soft"><div class="list">${due.map(x => { const d = daysTo(x.date), e = evById(x.eventId); return `<div class="row ${d<0?"overdue":""}">${ck(false,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div><div class="s">${d<0?"Overdue · ":d===0?"Today · ":d===1?"Tomorrow · ":""}${fmt(x.date)}${e ? " · " + esc(e.short||e.name) : ""}${x.detail ? " · " + esc(x.detail) : ""}</div></div></div>`; }).join("")}</div></div>` : "";
-  return `<div class="ph"><div><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div></div></div>
+  const soon = S.plans.filter(p => p.date && daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14).sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
+  const coming = `<div class="card soft">${soon.length ? `<div class="list">${soon.map(p => planRow(p)).join("")}</div>` : `<div class="empty" style="padding:12px 4px"><b>Nothing on the horizon</b>Trips, appointments, nights out. Add one below or say "New York next Sunday".</div>`}
+    <form class="add" data-form="plan" style="margin-top:10px"><input type="text" id="np" placeholder="e.g. New York for the day" required><input type="date" id="npd" value="${t}"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button><button class="btn quiet" type="button" data-act="view" data-id="plans">All plans</button></form></div>`;
+  return `<div class="ph"><div><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div></div>
     <div class="today-grid"><div class="card dinner-hero">${hero}${strip}</div>${host}</div>
+    <h2 class="eyebrow">Coming up</h2>${coming}
     <h2 class="eyebrow">Lists</h2>${lcards}
     ${due.length ? `<h2 class="eyebrow">Hosting to-dos this week</h2>${dueHtml}` : ""}`;
+}
+
+/* ───────────────────────── Plans (coming up) ───────────────────────── */
+function planRow(p){ const d = daysTo(p.date), multi = p.endDate && p.endDate !== p.date;
+  const when = `${d===0?"Today":d===1?"Tomorrow":d<0?"Started "+fmt(p.date):fmt(p.date,{weekday:"long",month:"short",day:"numeric"})}${multi ? " – " + fmt(p.endDate,{month:"short",day:"numeric"}) : ""}${p.time ? " · " + esc(p.time) : ""}`;
+  return `<div class="row plan"><span class="dot"></span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${when}${p.note ? " · " + esc(p.note) : ""}</div></div>${d > 1 && d <= 14 ? `<span class="pill">in ${d} days</span>` : ""}${del("plans", p.id)}</div>`; }
+function vPlans(){
+  const t = todayISO(), all = S.plans.slice().sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
+  const up = all.filter(p => (p.endDate || p.date) >= t), past = all.filter(p => (p.endDate || p.date) < t).reverse();
+  let html = "", last = "";
+  up.forEach(p => { const m = fmt(p.date,{month:"long",year:"numeric"}); if (m !== last) { if (last) html += `</div></div>`; last = m; html += `<h2 class="eyebrow">${m}</h2><div class="card soft"><div class="list">`; } html += planRow(p); });
+  if (last) html += `</div></div>`;
+  return `<div class="ph"><div><h1>Coming up</h1><div class="sub">Trips, appointments, nights out. Not a calendar, just what's ahead.</div></div><button class="btn sm ghost" data-act="view" data-id="today">Back to Today</button></div>
+    <div class="card"><form class="add" data-form="plan" style="margin-top:0"><input type="text" id="np" placeholder="What's coming up?" required><input type="date" id="npd" value="${t}" aria-label="Date"><input type="date" id="npe" aria-label="End date (optional)"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><input type="text" id="npn" placeholder="Note (optional)"><button class="btn">Add</button></form><p class="note">Second date is optional, for a trip that spans days.</p></div>
+    ${html || `<div class="empty"><b>Nothing planned yet</b></div>`}
+    ${past.length ? `<details class="checked"><summary>Past (${past.length})</summary><div class="card soft"><div class="list">${past.slice(0,30).map(planRow).join("")}</div></div></details>` : ""}`;
 }
 
 /* ───────────────────────── Lists ───────────────────────── */
@@ -139,11 +168,14 @@ function vLists(){
   if (!U.listId) return `<div class="ph"><h1>Lists</h1></div><div class="lists-layout">${index}<div class="empty"><b>Make your first list</b>Grocery, Costco, to-do, anything. Type a name on the left.</div></div>`;
   const L = S.lists.find(l => l.id === U.listId), items = listItems(L.id), open = items.filter(i => !i.done), done = items.filter(i => i.done), isIdeas = L.id === "ideas" || /idea/i.test(L.name);
   const week = [0,1,2,3,4,5,6].map(i => addDays(todayISO(), i));
-  const row = i => `<div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}
+  const row = i => { const rk = i.recipe && R[i.recipe] ? i.recipe : (isIdeas ? recipeFor(i.text) : ""), tm = i.time || (rk && recipeTime(rk));
+    return `<div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : ""}${linkPill(i.link)}</div>` : ""}
+    ${U.editList ? `<div class="edit"><input type="text" id="it-${i.id}" value="${esc(i.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 160px"><input type="text" id="il-${i.id}" value="${esc(i.link||"")}" placeholder="Link (Pinterest, recipe site)" style="flex:1 1 200px"><button class="btn sm ghost" data-act="saveitem" data-id="${i.id}">Save</button></div>` : ""}
     ${isIdeas && !i.done && U.pickIdea === i.id ? `<div class="daypick">${week.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(i.text)}">${d===todayISO()?"Tonight":fmt(d,{weekday:"short"})}</button>`).join("")}<button class="chip" data-act="plan" data-id="">Cancel</button></div>` : ""}</div>
-    ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${U.editList ? del("items", i.id) : ""}</div>`;
-  const main = `<div class="lhead"><h2>${esc(L.name)}</h2><div class="tools">${done.length ? `<button class="btn sm ghost" data-act="clearchecked" data-id="${L.id}">Clear ${done.length} checked</button>` : ""}<button class="btn sm ${U.editList?"":"quiet"}" data-act="editlist">${U.editList ? "Done" : "Edit"}</button>${U.editList ? `<button class="btn sm clay" data-act="dellist" data-id="${L.id}">${U.armed==="list"+L.id ? "Really delete?" : "Delete list"}</button>` : ""}</div></div>
-    <form class="quickadd" data-form="item"><input type="text" id="ni" placeholder="${isIdeas ? "A dinner idea…" : "Add to " + esc(L.name) + "…"}" aria-label="Add item" autocomplete="off"><button class="rbtn primary" aria-label="Add">${svg("plus")}</button></form>
+    ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${U.editList ? del("items", i.id) : ""}</div>`; };
+  const main = `<div class="lhead"><h2>${esc(L.name)}</h2><div class="tools">${safeUrl(L.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(L.link))}" target="_blank" rel="noopener">${esc(linkLabel(L.link))} board ↗</a>` : ""}${done.length ? `<button class="btn sm ghost" data-act="clearchecked" data-id="${L.id}">Clear ${done.length} checked</button>` : ""}<button class="btn sm ${U.editList?"":"quiet"}" data-act="editlist">${U.editList ? "Done" : "Edit"}</button>${U.editList ? `<button class="btn sm clay" data-act="dellist" data-id="${L.id}">${U.armed==="list"+L.id ? "Really delete?" : "Delete list"}</button>` : ""}</div></div>
+    ${U.editList ? `<form class="add" data-form="listlink" data-id="${L.id}" style="margin:0 0 10px"><input type="text" id="ll" value="${esc(L.link||"")}" placeholder="Board or page link for this list (e.g. your Pinterest board)"><button class="btn sm ghost">Save link</button></form>` : ""}
+    <form class="quickadd" data-form="item"><input type="text" id="ni" placeholder="${isIdeas ? "A dinner idea…" : "Add to " + esc(L.name) + "…"}" aria-label="Add item" autocomplete="off">${isIdeas ? `<input type="text" id="ni-time" placeholder="Time" aria-label="How long it takes" style="flex:0 1 110px">` : ""}<button class="rbtn primary" aria-label="Add">${svg("plus")}</button></form>
     <div class="card soft">${open.length ? `<div class="list">${open.map(row).join("")}</div>` : `<div class="empty"><b>${isIdeas ? "No ideas saved" : "All clear"}</b>${isIdeas ? "Jot down dinners you want to make. Plan one into the week with a tap." : "Add something above, or say it out loud."}</div>`}</div>
     ${done.length ? `<details class="checked" ${U.editList?"open":""}><summary>Checked off (${done.length})</summary><div class="card soft"><div class="list">${done.map(row).join("")}</div></div></details>` : ""}`;
   return `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done).length} open across ${lists.length} lists</div></div><div class="lists-layout">${index}<div>${main}</div></div>`;
@@ -155,14 +187,14 @@ function vDinners(){
   const range = `${fmt(start,{month:"long",day:"numeric"})} – ${fmt(days[6],{month:pd(start).getMonth()===pd(days[6]).getMonth()?undefined:"long",day:"numeric"})}`;
   const nav = `<div class="weeknav"><span class="range">${U.weekOff===0 ? "This week" : U.weekOff===1 ? "Next week" : U.weekOff===-1 ? "Last week" : "Week of " + fmt(start,{month:"short",day:"numeric"})}<span style="color:var(--muted);font-family:var(--sans);font-size:14px;margin-left:10px">${range}</span></span>
     <button class="rbtn" data-act="week" data-id="-1" aria-label="Previous week">${svg("prev")}</button>${U.weekOff ? `<button class="btn sm ghost" data-act="week" data-id="0">Today</button>` : ""}<button class="rbtn" data-act="week" data-id="1" aria-label="Next week">${svg("next")}</button></div>`;
-  const cards = `<div class="week">${days.map(d => { const m = S.dinners[d] || {}, n = daysTo(d); return `<button class="daycard ${d===t?"now":""} ${n<0?"past":""} ${U.editDinner===d?"editing":""}" data-act="editdinner" data-id="${d}"><div class="d">${fmt(d,{weekday:"short"})}<b>${pd(d).getDate()}</b></div><div class="m ${m.title?"":"none"}">${m.title ? esc(m.title) : "Nothing yet"}</div>${m.note ? `<div class="nt">${esc(m.note)}</div>` : ""}${m.recipe && R[m.recipe] ? `<span class="pill link tag">Recipe</span>` : ""}</button>`; }).join("")}</div>`;
+  const cards = `<div class="week">${days.map(d => { const m = S.dinners[d] || {}, n = daysTo(d), pl = plansOn(d), tm = shortTime(m.time, m.recipe); return `<button class="daycard ${d===t?"now":""} ${n<0?"past":""} ${U.editDinner===d?"editing":""}" data-act="editdinner" data-id="${d}"><div class="d">${fmt(d,{weekday:"short"})}<b>${pd(d).getDate()}</b></div>${pl.length ? `<div class="plans">${pl.map(p => `<span class="plan-chip">${esc(p.title)}</span>`).join("")}</div>` : ""}<div class="m ${m.title?"":"none"}">${m.title ? esc(m.title) : "Nothing yet"}</div>${m.note ? `<div class="nt">${esc(m.note)}</div>` : ""}<div class="tag">${timePill(tm)}${m.recipe && R[m.recipe] ? `<span class="pill link">Recipe</span>` : ""}${safeUrl(m.link) ? `<span class="pill link">${esc(linkLabel(m.link))}</span>` : ""}</div></button>`; }).join("")}</div>`;
   let edit = "";
   if (U.editDinner) { const d = U.editDinner, m = S.dinners[d] || {};
-    edit = `<div class="card dinner-edit"><h3>Dinner on ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h3><form class="add" data-form="dinner" data-date="${d}"><input type="text" id="dn-title" value="${esc(m.title||"")}" placeholder="What's for dinner?" autocomplete="off"><select id="dn-recipe" aria-label="Cookbook recipe">${recipeOptions(m.recipe)}</select><input type="text" id="dn-note" value="${esc(m.note||"")}" placeholder="Note (who's cooking, prep, takeout)"><button class="btn">Save</button>${m.title ? `<button class="btn ghost" type="button" data-act="cleardinner" data-id="${d}">Clear</button>` : ""}<button class="btn quiet" type="button" data-act="canceldinner">Close</button></form>
-      ${m.recipe && R[m.recipe] ? `<div class="inline"><button class="btn sm" data-act="cook" data-id="${m.recipe}">Cook it</button><button class="btn sm ghost" data-act="recipe" data-id="${m.recipe}">Recipe</button><button class="btn sm ghost" data-act="togrocery" data-id="${m.recipe}">Add ingredients to Grocery</button></div>` : ""}</div>`; }
+    edit = `<div class="card dinner-edit"><h3>Dinner on ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h3><form class="add" data-form="dinner" data-date="${d}"><input type="text" id="dn-title" value="${esc(m.title||"")}" placeholder="What's for dinner?" autocomplete="off"><select id="dn-recipe" aria-label="Cookbook recipe">${recipeOptions(m.recipe)}</select><input type="text" id="dn-note" value="${esc(m.note||"")}" placeholder="Note (who's cooking, prep, takeout)"><input type="text" id="dn-time" value="${esc(m.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 150px"><input type="text" id="dn-link" value="${esc(m.link||"")}" placeholder="Link (optional)"><button class="btn">Save</button>${m.title ? `<button class="btn ghost" type="button" data-act="cleardinner" data-id="${d}">Clear</button>` : ""}<button class="btn quiet" type="button" data-act="canceldinner">Close</button></form>
+      ${m.recipe && R[m.recipe] || safeUrl(m.link) ? `<div class="inline">${m.recipe && R[m.recipe] ? `<button class="btn sm" data-act="cook" data-id="${m.recipe}">Cook it</button><button class="btn sm ghost" data-act="recipe" data-id="${m.recipe}">Recipe</button><button class="btn sm ghost" data-act="togrocery" data-id="${m.recipe}">Add ingredients to Grocery</button>` : ""}${safeUrl(m.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(m.link))}" target="_blank" rel="noopener">Open ${esc(linkLabel(m.link))} ↗</a>` : ""}</div>` : ""}</div>`; }
   const ideasList = S.lists.find(l => l.id === "ideas") || S.lists.find(l => /idea/i.test(l.name));
   const ideas = ideasList ? openItems(ideasList.id) : [];
-  const ideasHtml = `<div class="ideas-panel"><h2 class="eyebrow">Meal ideas</h2>${ideas.length ? `<div class="ideas">${ideas.map(i => `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="plan" data-id="${i.id}">${esc(i.text)}</button>`).join("")}</div>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
+  const ideasHtml = `<div class="ideas-panel"><div class="ideas-head"><p class="eyebrow">Meal ideas</p>${ideasList && safeUrl(ideasList.link) ? `<a class="pill link ext" href="${esc(safeUrl(ideasList.link))}" target="_blank" rel="noopener" style="margin:0">${esc(linkLabel(ideasList.link))} board ↗</a>` : ""}</div>${ideas.length ? `<div class="ideas">${ideas.map(i => { const tm = shortTime(i.time, i.recipe || recipeFor(i.text)); return `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="plan" data-id="${i.id}">${esc(i.text)}${tm ? `<span>${esc(tm)}</span>` : ""}</button>`; }).join("")}</div>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
     ${U.pickIdea && ideas.find(i => i.id === U.pickIdea) ? `<p class="note" style="margin-top:14px">Put <b>${esc(ideas.find(i => i.id === U.pickIdea).text)}</b> on which night?</p><div class="daypick">${days.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(ideas.find(i => i.id === U.pickIdea).text)}">${fmt(d,{weekday:"short",day:"numeric"})}</button>`).join("")}</div>` : ""}</div>`;
   return `<div class="ph"><div><h1>Dinners</h1><div class="sub">Plan the week on Sunday, shop once.</div></div></div>${nav}${cards}${edit}${ideasHtml}`;
 }
@@ -403,6 +435,7 @@ function captureContext(){
   const dishes = S.events.map(e => `${e.id}: ${S.dishes.filter(d => d.eventId === e.id).map(d => d.name + (d.ready ? " [made]" : "") + (d.who ? " (" + d.who + ")" : "")).join(", ") || "none"}`).join("\n");
   const tasks = S.tasks.filter(x => !x.done).sort(byDate).slice(0,60).map(x => `- ${x.title} (${x.eventId}, ${x.date||"no date"})`).join("\n");
   const cookbook = Object.entries(R).map(([k,v]) => `${k}=${v.title}`).join("; ");
+  const plans = S.plans.filter(p => (p.endDate || p.date) >= addDays(t,-1)).sort(byDate).slice(0,40).map(p => `- ${p.title} on ${p.date}${p.endDate && p.endDate !== p.date ? " to " + p.endDate : ""}${p.time ? " " + p.time : ""}`).join("\n");
   return `Today is ${fmt(t,{weekday:"long",month:"long",day:"numeric",year:"numeric"})} (${t}). This week runs ${ws} to ${addDays(ws,6)}, Sunday to Saturday.
 
 LISTS (name, id, open items):
@@ -410,6 +443,9 @@ ${lists || "(no lists yet)"}
 
 DINNERS planned (this week and next):
 ${dinners}
+
+COMING UP (plans: trips, appointments, nights out):
+${plans || "(none)"}
 
 HOSTING EVENTS:
 ${events || "(none)"}
@@ -425,12 +461,14 @@ COOKBOOK keys=titles: ${cookbook}`;
 const CAPTURE_RULES = `You sort spoken or typed notes for a household app (lists, weekly dinners, holiday hosting). Turn the note into actions. Reply with ONLY a JSON object: {"reply": string, "actions": [ ... ]}. "reply" is one short, warm sentence (under 20 words) saying what you did, written to the person who spoke.
 
 Allowed action shapes:
-{"type":"add_items","list":"Grocery","items":[{"text":"paper towels","note":""}]}
+{"type":"add_items","list":"Grocery","items":[{"text":"paper towels","note":"","time":""}]}
 {"type":"check_items","list":"Costco","items":["paper towels"]}
 {"type":"uncheck_items","list":"Costco","items":["paper towels"]}
 {"type":"remove_items","list":"Costco","items":["paper towels"]}
 {"type":"create_list","name":"Target"}
-{"type":"set_dinner","date":"YYYY-MM-DD","title":"Tacos","recipe":"","note":""}
+{"type":"set_dinner","date":"YYYY-MM-DD","title":"Tacos","recipe":"","note":"","time":""}
+{"type":"add_plan","title":"New York for the day","date":"YYYY-MM-DD","endDate":"","time":"","note":""}
+{"type":"remove_plan","match":"<words from the plan title>"}
 {"type":"clear_dinner","date":"YYYY-MM-DD"}
 {"type":"add_task","event":"<event id>","title":"...","date":"YYYY-MM-DD","time":"","cat":"food","detail":""}
 {"type":"complete_task","match":"<words from the to-do title>"}
@@ -444,7 +482,9 @@ Allowed action shapes:
 
 Rules:
 - Lists: Grocery is for food and supermarket items, Costco for bulk or anything said with "Costco", To-do for errands and general tasks, Meal ideas for dinner ideas ("idea: ..."). Use an existing list name exactly as given. Create a new list only when the note clearly names a list that doesn't exist.
-- "Tonight" is today. A weekday name means the next such day from today (today if it is that day). "What's for dinner" style notes are set_dinner. When the dinner matches a cookbook title, put its key in "recipe".
+- "Tonight" is today. A weekday name means the next such day from today (today if it is that day); "next Sunday" after a weekday name means the one after this coming one only when the note says "next week". "What's for dinner" style notes are set_dinner. When the dinner matches a cookbook title, put its key in "recipe". A time estimate mentioned ("takes 30 minutes") goes in "time".
+- Things happening on a date that are not to-dos (a trip, an appointment, a night out, a visitor, a game) are add_plan. A to-do is something to get done; a plan is somewhere to be.
+- Dinner ideas without a date ("idea: lemon chicken", "I want to make tacos sometime") are add_items on Meal ideas; a duration that was said ("takes 30 minutes") goes in the item's "time".
 - cat is one of invites, reservations, rooms, house, food. course is one of Breakfast, Appetizers, Dinner, Sides, Dessert, Drinks, Other. status is yes, no or maybe. For rsvp, leave event empty to update that guest on every event of their weekend.
 - Hosting notes go to the event the note is about. If a holiday is named but not an event, use the main dinner event of that weekend. If a to-do has no date, use a sensible date before the event.
 - Split a note with several things into several actions. Keep item text short, like a list entry. Don't invent items. Don't repeat an action that already exists in the data (for example an item already on the list).
@@ -483,17 +523,23 @@ async function applyActions(actions){
         for (const it of (a.items||[]).slice(0,40)) { const text = String((it && it.text) || it || "").trim(); if (!text || have.has(norm(text))) continue;
           const old = listItems(L.id).find(i => i.done && norm(i.text) === norm(text));
           if (old) { if (await updated("items", old, {done:false, createdAt: base + n})) { have.add(norm(text)); n++; } continue; }
-          if (await created("items", {listId:L.id, text, note:String((it && it.note) || ""), done:false, createdAt: base + n})) { have.add(norm(text)); n++; } }
+          const note0 = String((it && it.note) || ""), time0 = String((it && it.time) || "") || (/^\s*(about\s*)?\d+\s*(min|minute|hr|hour)/i.test(note0) ? note0 : "");
+          if (await created("items", {listId:L.id, text, note: time0 === note0 ? "" : note0, time: time0, link:"", recipe: L.id === "ideas" ? recipeFor(text) : "", done:false, createdAt: base + n})) { have.add(norm(text)); n++; } }
         done.push(`${n} added to ${L.name}`); }
       else if (a.type === "check_items" || a.type === "uncheck_items" || a.type === "remove_items") { const L = findListByName(a.list); const pool = L ? listItems(L.id) : S.items; let n = 0;
         for (const t of (a.items||[]).slice(0,40)) { const it = fuzzy(pool, t, "text"); if (!it) { skipped.push(`Couldn't find "${t}"${L ? " on " + L.name : ""}`); continue; }
           if (a.type === "remove_items") { if (await removed("items", it)) n++; } else { const wantDone = a.type === "check_items"; if (!!it.done !== wantDone && await updated("items", it, {done:wantDone, doneAt: wantDone ? Date.now() : null})) n++; } }
         if (n) done.push(`${n} ${a.type === "remove_items" ? "removed from" : a.type === "check_items" ? "checked off" : "put back on"} ${L ? L.name : "lists"}`); }
       else if (a.type === "set_dinner") { const d = String(a.date||"").slice(0,10); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { skipped.push("Dinner needs a date"); continue; }
-        const cur = S.dinners[d], data = {title:String(a.title||"").trim(), recipe: R[a.recipe] ? a.recipe : "", note:String(a.note||"")};
+        const cur = S.dinners[d], data = {title:String(a.title||"").trim(), recipe: R[a.recipe] ? a.recipe : recipeFor(a.title), note:String(a.note||""), time:String(a.time||"")};
         if (!data.title) { skipped.push("Dinner needs a name"); continue; }
         if (cur) { await updated("dinners", {id:d, ...cur}, data); } else { const ok = await w("dinners", d, data, "set"); if (ok) undo.push({col:"dinners", id:d, prev:null}); }
         done.push(`${fmt(d,{weekday:"short"})}: ${data.title}`); }
+      else if (a.type === "add_plan") { const d = String(a.date||"").slice(0,10); const title = String(a.title||"").trim(); if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !title) { skipped.push("A plan needs a name and a date"); continue; }
+        if (S.plans.some(p => p.date === d && norm(p.title) === norm(title))) { skipped.push(`${title} is already on ${fmt(d)}`); continue; }
+        const endDate = /^\d{4}-\d{2}-\d{2}$/.test(a.endDate||"") && a.endDate > d ? a.endDate : "";
+        if (await created("plans", {title, date:d, endDate, time:String(a.time||""), note:String(a.note||""), createdAt:Date.now()})) done.push(`${fmt(d,{weekday:"short",month:"short",day:"numeric"})}: ${title}`); }
+      else if (a.type === "remove_plan") { const p = fuzzy(S.plans, a.match, "title"); if (!p) { skipped.push(`Couldn't find plan "${a.match}"`); continue; } if (await removed("plans", p)) done.push(`Removed ${p.title}`); }
       else if (a.type === "clear_dinner") { const d = String(a.date||""), cur = S.dinners[d]; if (cur) { await removed("dinners", {id:d, ...cur}); done.push(`Cleared ${fmt(d,{weekday:"short"})}`); } else skipped.push("Nothing planned that night"); }
       else if (a.type === "add_task") { const e = eventOf(a.event) || nextEvent(); if (!e) { skipped.push("No event for that to-do"); continue; } const title = String(a.title||"").trim(); if (!title) continue;
         const date = /^\d{4}-\d{2}-\d{2}$/.test(a.date||"") ? a.date : (daysTo(e.date) > 1 ? addDays(e.date,-1) : e.date);
@@ -536,7 +582,7 @@ document.addEventListener("click", async ev => {
     case "item": { const x = S.items.find(i => i.id === id); if (x) w("items", id, {done:!x.done, doneAt: x.done ? null : Date.now()}); break; }
     case "clearchecked": { const its = listItems(id).filter(i => i.done); await Promise.all(its.map(i => w("items", i.id, null, "delete"))); toast(`Cleared ${its.length}`); break; }
     case "plan": U.pickIdea = id || null; break;
-    case "pickday": { const title = b.dataset.idea || ""; if (title) { const cur = S.dinners[id] || {}; const rk = Object.keys(R).find(k => norm(R[k].title) === norm(title)) || ""; await w("dinners", id, {...cur, title, recipe: cur.recipe || rk, note: cur.note || ""}, "set"); toast(`${title} on ${fmt(id,{weekday:"long"})}`); } U.pickIdea = null; break; }
+    case "pickday": { const title = b.dataset.idea || "", idea = S.items.find(i => i.id === U.pickIdea) || {}; if (title) { const cur = S.dinners[id] || {}; const rk = idea.recipe && R[idea.recipe] ? idea.recipe : recipeFor(title); await w("dinners", id, {...cur, title, recipe: rk, note: cur.note || "", time: idea.time || "", link: idea.link || ""}, "set"); toast(`${title} on ${fmt(id,{weekday:"long"})}`); } U.pickIdea = null; break; }
     case "editdinner": U.view = "dinners"; ls.set("hph_view","dinners"); U.weekOff = Math.round((pd(weekStart(id)) - pd(weekStart(todayISO()))) / (7*864e5)); U.editDinner = id; U.pickIdea = null; break;
     case "canceldinner": U.editDinner = null; break;
     case "cleardinner": await w("dinners", id, null, "delete"); U.editDinner = null; break;
@@ -552,6 +598,7 @@ document.addEventListener("click", async ev => {
     case "chk": { const [eid,k] = id.split("|"); const c = S.checks[eid]; if (c) w("checks", eid, {[k]:!c[k]}); else w("checks", eid, {[k]:true}, "set"); break; }
     case "rsvp": { const x = S.guests.find(t => t.id === id); if (x) w("guests", id, {rsvp:{maybe:"yes",yes:"no",no:"maybe"}[x.rsvp||"maybe"]}); break; }
     case "ritem": { const [rid,item] = id.split("|"); const r = S.rooms.find(x => x.id === rid); if (r) w("rooms", rid, {items:{...(r.items||{}), [item]:!(r.items||{})[item]}}); break; }
+    case "saveitem": w("items", id, {time:$("#it-"+id).value.trim(), link:$("#il-"+id).value.trim()}); toast("Saved"); break;
     case "saveroom": w("rooms", id, {guests:$("#rg-"+id).value.trim(), nights:$("#rn-"+id).value.trim()}); toast("Saved"); break;
     case "toggle": U.open[id] = !U.open[id]; break;
     case "savedish": w("dishes", id, {who:$("#who-"+id).value.trim(), makeAhead:$("#ma-"+id).value.trim()}); U.open[id] = false; break;
@@ -581,9 +628,11 @@ document.addEventListener("change", e => { const i = e.target.closest("[data-set
 document.addEventListener("submit", async e => {
   e.preventDefault(); const f = e.target.dataset.form, v = s => ($(s) ? $(s).value : "").trim();
   if (e.target.id === "capform") { const t = v("#capin"); if (!t) return; $("#capin").value = ""; submitCapture(t); return; }
-  if (f === "item" && v("#ni") && U.listId) { await add("items", {listId:U.listId, text:v("#ni"), note:"", done:false, createdAt:Date.now()}); e.target.reset(); const i = $("#ni"); if (i) i.focus(); return; }
+  if (f === "item" && v("#ni") && U.listId) { await add("items", {listId:U.listId, text:v("#ni"), note:"", time:v("#ni-time"), link:"", recipe:recipeFor(v("#ni")), done:false, createdAt:Date.now()}); e.target.reset(); const i = $("#ni"); if (i) i.focus(); return; }
+  if (f === "plan" && v("#np")) { const d = v("#npd") || todayISO(), e2 = v("#npe"); await add("plans", {title:v("#np"), date:d, endDate: e2 && e2 > d ? e2 : "", time:v("#npt"), note:v("#npn"), createdAt:Date.now()}); toast("Added to Coming up"); }
+  if (f === "listlink") { await w("lists", e.target.dataset.id, {link: v("#ll")}); toast("Link saved"); U.editList = false; }
   if (f === "list" && v("#nl")) { const name = v("#nl"); const id = await add("lists", {name, order:S.lists.length, createdAt:Date.now()}); if (id) { U.listId = id; ls.set("hph_list", id); } }
-  if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe, note:v("#dn-note")}, "set"); U.editDinner = null; toast("Saved"); }
+  if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe: recipe || recipeFor(title), note:v("#dn-note"), time:v("#dn-time"), link:v("#dn-link")}, "set"); U.editDinner = null; toast("Saved"); }
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
   if (f === "guest" && v("#ng")) add("guests", {eventId:v("#nge"), name:v("#ng"), diet:v("#ngd"), rsvp:"maybe"});
   if (f === "extra" && v("#ne")) add("extras", {eventId:v("#nee"), item:v("#ne"), done:false});
@@ -598,7 +647,7 @@ renderCapture(); render();
   use("sample").then(s => { sample = s; renderCapture(); });
   db = await use("db");
   if (!db) { ready = true; noDb = true; render(); return; }
-  const cols = ["events","dishes","guests","tasks","extras","rooms","lists","items"];
+  const cols = ["events","dishes","guests","tasks","extras","rooms","lists","items","plans"];
   const first = () => { if (++seen >= cols.length + 2) ready = true; render(); };
   cols.forEach(c => db.collection(c).onSnapshot(s => { S[c] = s.docs.map(d => ({id:d.id, ...d.data()})); first(); }, () => first()));
   db.collection("checks").onSnapshot(s => { S.checks = {}; s.docs.forEach(d => S.checks[d.id] = d.data()); first(); }, () => first());
