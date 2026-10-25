@@ -12,6 +12,7 @@
   sample.json = async (input) => { window.__lastPrompt = input; const note = /NOTE: """([\s\S]*)"""/.exec(input)[1];
     if (/costco/i.test(note)) return {reply:"Added paper towels and olive oil to Costco.", actions:[{type:"add_items",list:"Costco",items:[{text:"Paper towels"},{text:"Olive oil"}]}]};
     if (/new york/i.test(note)) return {reply:"Added New York next Sunday and lemon chicken to ideas.", actions:[{type:"add_plan",title:"New York",date:"2026-11-08",endDate:"",time:"",note:""},{type:"add_items",list:"Meal ideas",items:[{text:"Lemon chicken",note:"30 min"}]}]};
+    if (/pot roast/i.test(note)) return {reply:"Thursday is pot roast.", actions:[{type:"set_dinner",date:"2026-10-29",title:"French Onion Pot Roast",recipe:"",note:""}]};
     if (/thursday/i.test(note)) return {reply:"Thursday is tacos.", actions:[{type:"set_dinner",date:"2026-10-29",title:"Tacos",recipe:"",note:""},{type:"rsvp",event:"",name:"Nick",status:"no"},{type:"complete_task",match:"turducken"}]};
     return {reply:"Nothing to do there.", actions:[]}; };
   window.claude = { use: async n => n === "db" ? db : n === "sample" ? sample : null };

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch",
+      "Bash(curl:*)",
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Artifact",
+      "ArtifactData"
+    ]
+  }
+}

@@ -17,9 +17,9 @@ Live app: https://claude.ai/artifact/Qu5T4kmZDYyRck4Vz3HN3S (a claude.ai artifac
 | Collection | Document | Notes |
 | --- | --- | --- |
 | `lists` | `{name, order, link}` | Fixed ids for the defaults: `grocery`, `costco`, `todo`, `ideas`. `link` is an optional board or page link shown as a button (the Pinterest board on Meal ideas) |
-| `items` | `{listId, text, note, time, link, recipe, done, createdAt, doneAt}` | List entries. Meal ideas use `time` (how long it takes), `link` (Pinterest or a recipe site) and `recipe` (cookbook key) |
+| `items` | `{listId, text, note, time, link, recipe, servings, ingredients[], steps[], done, createdAt, doneAt}` | List entries. Meal ideas use `time` (how long it takes), `link` (Pinterest or a recipe site), `recipe` (cookbook key), and for imported recipes `ingredients` and `steps` so the app can show and cook them |
 | `plans` | `{title, date, endDate, time, note, createdAt}` | "Coming up": trips, appointments, nights out. Shown on Today and on the matching day in Dinners |
-| `dinners` | id is the date `YYYY-MM-DD`: `{title, recipe, note, time, link}` | Weeks run Sunday to Saturday |
+| `dinners` | id is the date `YYYY-MM-DD`: `{title, recipe, note, time, link, servings, ingredients[], steps[]}` | Weeks run Sunday to Saturday. Tapping a day with a recipe (cookbook key, stored ingredients and steps, or a link) opens the recipe sheet |
 | `events` | `{name, short, date, time, theme, weekend, dinnerAt, appsAt, breakfastAt, ovenCap, headcount}` | Hosting events, grouped by `weekend` |
 | `tasks` | `{eventId, title, detail, date, time, t, cat, done, recipe}` | Hosting checklist |
 | `dishes` | `{eventId, name, recipe, course, who, makeAhead, order, ready}` | Menus |

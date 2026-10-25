@@ -98,6 +98,14 @@ const timePill = t => t ? `<span class="pill time">${esc(t)}</span>` : "";
 const shortTime = (t, k) => t || (k && R[k] ? (((R[k].meta.find(x => /^(Cook|Roast|Steam|Chill|Bake):/.test(x)) || "").split(": ")[1] || "").replace(/^about /i, "")) : "");
 const linkPill = u => safeUrl(u) ? `<a class="pill link ext" href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${esc(linkLabel(u))} ↗</a>` : "";
 const plansOn = d => S.plans.filter(p => p.date && p.date <= d && (p.endDate || p.date) >= d).sort((a,b) => (a.time||"").localeCompare(b.time||""));
+/* A recipe to show or cook can come from the cookbook (key), from fields stored on a dinner or idea (imported), or be link-only. */
+const hasContent = o => !!(o && ((o.ingredients||[]).length || (o.steps||[]).length));
+function recipeObj(o, src){ if (!o) return null;
+  if (o.recipe && R[o.recipe]) return {...R[o.recipe], key:o.recipe, link:o.link || "", src};
+  if (hasContent(o) || safeUrl(o.link)) return {title:o.title || o.text || "Recipe", note:o.note || "", meta:[o.time ? "Time: " + o.time : "", o.servings ? "Serves: " + o.servings : ""].filter(Boolean), ingredients:o.ingredients || [], steps:o.steps || [], link:o.link || "", src};
+  return null; }
+const recipeFromRef = ref => { const [kind, ...rest] = String(ref||"").split(":"); const id = rest.join(":");
+  if (kind === "dinner") return recipeObj(S.dinners[id], ref); if (kind === "item") return recipeObj(S.items.find(i => i.id === id), ref); return R[kind] ? {...R[kind], key:kind, src:"cb:"+kind} : (R[id] ? {...R[id], key:id, src:"cb:"+id} : null); };
 const recipeOptions = sel => `<option value="">From the cookbook (optional)</option>` + Object.entries(R).sort((a,b) => a[1].title.localeCompare(b[1].title)).map(([k,v]) => `<option value="${k}" ${sel===k?"selected":""}>${esc(v.title)}</option>`).join("");
 
 /* ───────────────────────── Render shell ───────────────────────── */
@@ -122,7 +130,7 @@ function vToday(){
   const dn = S.dinners[t], ws = weekStart(t);
   const dnTime = dn && (dn.time || (dn.recipe && recipeTime(dn.recipe)));
   const hero = dn && dn.title ? `<p class="eyebrow">Tonight</p><div class="big">${esc(dn.title)}</div>${dn.note ? `<div class="muted">${esc(dn.note)}</div>` : ""}${dnTime || (dn && dn.link) ? `<div>${timePill(dnTime)}${linkPill(dn.link)}</div>` : ""}
-      <div class="inline">${dn.recipe && R[dn.recipe] ? `<button class="btn sm" data-act="cook" data-id="${dn.recipe}">Cook it</button><button class="btn sm ghost" data-act="recipe" data-id="${dn.recipe}">Recipe</button>` : ""}<button class="btn sm quiet" data-act="editdinner" data-id="${t}">Change</button></div>`
+      <div class="inline">${recipeObj(dn) ? `${(recipeObj(dn).steps||[]).length ? `<button class="btn sm" data-act="cook" data-id="dinner:${t}">Cook it</button>` : ""}<button class="btn sm ghost" data-act="recipe" data-id="dinner:${t}">Recipe</button>` : ""}<button class="btn sm quiet" data-act="editdinner" data-id="${t}">Change</button></div>`
     : `<p class="eyebrow">Tonight</p><div class="big" style="color:var(--faint)">Nothing planned yet</div><div class="inline"><button class="btn sm" data-act="editdinner" data-id="${t}">Plan dinner</button></div>`;
   const strip = `<div class="weekstrip">${[0,1,2,3,4,5,6].map(i => { const d = addDays(ws,i), m = S.dinners[d]; return `<button class="${d===t?"now":""}" data-act="editdinner" data-id="${d}"><b>${fmt(d,{weekday:"short"})}</b><span>${m && m.title ? esc(m.title) : "–"}</span></button>`; }).join("")}</div>`;
   const lists = sortedLists();
@@ -169,7 +177,7 @@ function vLists(){
   const L = S.lists.find(l => l.id === U.listId), items = listItems(L.id), open = items.filter(i => !i.done), done = items.filter(i => i.done), isIdeas = L.id === "ideas" || /idea/i.test(L.name);
   const week = [0,1,2,3,4,5,6].map(i => addDays(todayISO(), i));
   const row = i => { const rk = i.recipe && R[i.recipe] ? i.recipe : (isIdeas ? recipeFor(i.text) : ""), tm = i.time || (rk && recipeTime(rk));
-    return `<div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : ""}${linkPill(i.link)}</div>` : ""}
+    return `<div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk || hasContent(i) ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : hasContent(i) ? `<button class="pill link" data-act="recipe" data-id="item:${i.id}">Recipe</button>` : ""}${linkPill(i.link)}</div>` : ""}
     ${U.editList ? `<div class="edit"><input type="text" id="it-${i.id}" value="${esc(i.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 160px"><input type="text" id="il-${i.id}" value="${esc(i.link||"")}" placeholder="Link (Pinterest, recipe site)" style="flex:1 1 200px"><button class="btn sm ghost" data-act="saveitem" data-id="${i.id}">Save</button></div>` : ""}
     ${isIdeas && !i.done && U.pickIdea === i.id ? `<div class="daypick">${week.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(i.text)}">${d===todayISO()?"Tonight":fmt(d,{weekday:"short"})}</button>`).join("")}<button class="chip" data-act="plan" data-id="">Cancel</button></div>` : ""}</div>
     ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${U.editList ? del("items", i.id) : ""}</div>`; };
@@ -187,11 +195,11 @@ function vDinners(){
   const range = `${fmt(start,{month:"long",day:"numeric"})} – ${fmt(days[6],{month:pd(start).getMonth()===pd(days[6]).getMonth()?undefined:"long",day:"numeric"})}`;
   const nav = `<div class="weeknav"><span class="range">${U.weekOff===0 ? "This week" : U.weekOff===1 ? "Next week" : U.weekOff===-1 ? "Last week" : "Week of " + fmt(start,{month:"short",day:"numeric"})}<span style="color:var(--muted);font-family:var(--sans);font-size:14px;margin-left:10px">${range}</span></span>
     <button class="rbtn" data-act="week" data-id="-1" aria-label="Previous week">${svg("prev")}</button>${U.weekOff ? `<button class="btn sm ghost" data-act="week" data-id="0">Today</button>` : ""}<button class="rbtn" data-act="week" data-id="1" aria-label="Next week">${svg("next")}</button></div>`;
-  const cards = `<div class="week">${days.map(d => { const m = S.dinners[d] || {}, n = daysTo(d), pl = plansOn(d), tm = shortTime(m.time, m.recipe); return `<button class="daycard ${d===t?"now":""} ${n<0?"past":""} ${U.editDinner===d?"editing":""}" data-act="editdinner" data-id="${d}"><div class="d">${fmt(d,{weekday:"short"})}<b>${pd(d).getDate()}</b></div>${pl.length ? `<div class="plans">${pl.map(p => `<span class="plan-chip">${esc(p.title)}</span>`).join("")}</div>` : ""}<div class="m ${m.title?"":"none"}">${m.title ? esc(m.title) : "Nothing yet"}</div>${m.note ? `<div class="nt">${esc(m.note)}</div>` : ""}<div class="tag">${timePill(tm)}${m.recipe && R[m.recipe] ? `<span class="pill link">Recipe</span>` : ""}${safeUrl(m.link) ? `<span class="pill link">${esc(linkLabel(m.link))}</span>` : ""}</div></button>`; }).join("")}</div>`;
+  const cards = `<div class="week">${days.map(d => { const m = S.dinners[d] || {}, n = daysTo(d), pl = plansOn(d), tm = shortTime(m.time, m.recipe); return `<button class="daycard ${d===t?"now":""} ${n<0?"past":""} ${U.editDinner===d?"editing":""}" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}"><div class="d">${fmt(d,{weekday:"short"})}<b>${pd(d).getDate()}</b></div>${pl.length ? `<div class="plans">${pl.map(p => `<span class="plan-chip">${esc(p.title)}</span>`).join("")}</div>` : ""}<div class="m ${m.title?"":"none"}">${m.title ? esc(m.title) : "Nothing yet"}</div>${m.note ? `<div class="nt">${esc(m.note)}</div>` : ""}<div class="tag">${timePill(tm)}${m.recipe && R[m.recipe] || hasContent(m) ? `<span class="pill link">Recipe</span>` : safeUrl(m.link) ? `<span class="pill link">${esc(linkLabel(m.link))}</span>` : ""}</div></button>`; }).join("")}</div>`;
   let edit = "";
   if (U.editDinner) { const d = U.editDinner, m = S.dinners[d] || {};
     edit = `<div class="card dinner-edit"><h3>Dinner on ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h3><form class="add" data-form="dinner" data-date="${d}"><input type="text" id="dn-title" value="${esc(m.title||"")}" placeholder="What's for dinner?" autocomplete="off"><select id="dn-recipe" aria-label="Cookbook recipe">${recipeOptions(m.recipe)}</select><input type="text" id="dn-note" value="${esc(m.note||"")}" placeholder="Note (who's cooking, prep, takeout)"><input type="text" id="dn-time" value="${esc(m.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 150px"><input type="text" id="dn-link" value="${esc(m.link||"")}" placeholder="Link (optional)"><button class="btn">Save</button>${m.title ? `<button class="btn ghost" type="button" data-act="cleardinner" data-id="${d}">Clear</button>` : ""}<button class="btn quiet" type="button" data-act="canceldinner">Close</button></form>
-      ${m.recipe && R[m.recipe] || safeUrl(m.link) ? `<div class="inline">${m.recipe && R[m.recipe] ? `<button class="btn sm" data-act="cook" data-id="${m.recipe}">Cook it</button><button class="btn sm ghost" data-act="recipe" data-id="${m.recipe}">Recipe</button><button class="btn sm ghost" data-act="togrocery" data-id="${m.recipe}">Add ingredients to Grocery</button>` : ""}${safeUrl(m.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(m.link))}" target="_blank" rel="noopener">Open ${esc(linkLabel(m.link))} ↗</a>` : ""}</div>` : ""}</div>`; }
+      ${recipeObj(m) ? `<div class="inline">${(recipeObj(m).steps||[]).length ? `<button class="btn sm" data-act="cook" data-id="dinner:${d}">Cook it</button>` : ""}<button class="btn sm ghost" data-act="recipe" data-id="dinner:${d}">Recipe</button>${(recipeObj(m).ingredients||[]).length ? `<button class="btn sm ghost" data-act="togrocery" data-id="dinner:${d}">Add ingredients to Grocery</button>` : ""}${safeUrl(m.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(m.link))}" target="_blank" rel="noopener">Open ${esc(linkLabel(m.link))} ↗</a>` : ""}</div>` : ""}</div>`; }
   const ideasList = S.lists.find(l => l.id === "ideas") || S.lists.find(l => /idea/i.test(l.name));
   const ideas = ideasList ? openItems(ideasList.id) : [];
   const ideasHtml = `<div class="ideas-panel"><div class="ideas-head"><p class="eyebrow">Meal ideas</p>${ideasList && safeUrl(ideasList.link) ? `<a class="pill link ext" href="${esc(safeUrl(ideasList.link))}" target="_blank" rel="noopener" style="margin:0">${esc(linkLabel(ideasList.link))} board ↗</a>` : ""}</div>${ideas.length ? `<div class="ideas">${ideas.map(i => { const tm = shortTime(i.time, i.recipe || recipeFor(i.text)); return `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="plan" data-id="${i.id}">${esc(i.text)}${tm ? `<span>${esc(tm)}</span>` : ""}</button>`; }).join("")}</div>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
@@ -365,12 +373,15 @@ function vCookbook(){
     ${hits.length ? `<div class="rgrid">${hits.map(card).join("")}</div>` : `<div class="empty"><b>No recipes match</b>Try a shorter word.</div>`}`;
 }
 
-function showRecipe(k){
-  const r = R[k]; if (!r) return;
-  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel" role="dialog" aria-modal="true" aria-label="${esc(r.title)}"><div class="top-actions"><button class="btn sm" data-act="cook" data-id="${k}">Cook</button><button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>${esc(r.title)}</h3>
-    ${r.note?`<p class="note" style="font-style:italic;font-size:15px">${esc(r.note)}</p>`:""}<div class="meta">${r.meta.map(m => { const [a,...b] = m.split(": "); return `<span><b>${esc(a)}</b>${esc(b.join(": "))}</span>`; }).join("")}</div>
-    <div class="cols"><div><p class="eyebrow">Ingredients</p><ul class="ing">${r.ingredients.map(i => i.startsWith("## ") ? `<li class="sub">${esc(i.slice(3))}</li>` : `<li>${esc(i)}</li>`).join("")}</ul><div class="inline"><button class="btn sm ghost" data-act="togrocery" data-id="${k}">Add ingredients to Grocery</button></div></div>
-    <div><p class="eyebrow">Method</p><ol>${r.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></div></div></div></div>`;
+function showRecipe(ref){
+  const r = recipeFromRef(ref); if (!r) return; const src = r.src || ref, date = /^dinner:/.test(src) ? src.slice(7) : "", cookable = (r.steps||[]).length > 0;
+  const body = cookable || (r.ingredients||[]).length ? `<div class="cols"><div><p class="eyebrow">Ingredients</p><ul class="ing">${r.ingredients.map(i => i.startsWith("## ") ? `<li class="sub">${esc(i.slice(3))}</li>` : `<li>${esc(i)}</li>`).join("")}</ul>${r.ingredients.length ? `<div class="inline"><button class="btn sm ghost" data-act="togrocery" data-id="${esc(src)}">Add ingredients to Grocery</button></div>` : ""}</div>
+    <div><p class="eyebrow">Method</p><ol>${r.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></div></div>`
+    : `<div class="empty" style="padding:10px 0 4px"><b>The full recipe lives on ${esc(linkLabel(r.link))}</b>Tap Open recipe to read it there. The Sunday import brings ingredients and steps into the app for new recipes, and a note to me pulls in this one.</div>`;
+  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel" role="dialog" aria-modal="true" aria-label="${esc(r.title)}"><div class="top-actions">${cookable ? `<button class="btn sm" data-act="cook" data-id="${esc(src)}">Cook</button>` : ""}<button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>${esc(r.title)}</h3>
+    ${r.note?`<p class="note" style="font-style:italic;font-size:15px">${esc(r.note)}</p>`:""}${r.meta.length ? `<div class="meta">${r.meta.map(m => { const [a,...b] = m.split(": "); return `<span><b>${esc(a)}</b>${esc(b.join(": "))}</span>`; }).join("")}</div>` : ""}
+    ${safeUrl(r.link) || date ? `<div class="inline" style="margin:4px 0 12px">${safeUrl(r.link) ? `<a class="btn sm ${cookable ? "ghost" : ""}" href="${esc(safeUrl(r.link))}" target="_blank" rel="noopener">Open recipe on ${esc(linkLabel(r.link))} ↗</a>` : ""}${date ? `<button class="btn sm quiet" data-act="editdinner" data-id="${date}">Change this dinner</button>` : ""}</div>` : ""}
+    ${body}</div></div>`;
   $("#overlay .close").focus();
 }
 
@@ -378,13 +389,13 @@ function showRecipe(k){
 let COOK = null, wake = null, tick = null, audioCtx = null;
 async function keepAwake(on){ try { if (on && !wake && navigator.wakeLock) { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => { wake = null; }); } else if (!on && wake) { await wake.release(); wake = null; } } catch(e) { wake = null; } }
 document.addEventListener("visibilitychange", () => { if (COOK && document.visibilityState === "visible") keepAwake(true); });
-function startCook(k){ if (!R[k]) return; $("#overlay").innerHTML = ""; COOK = {k, step:0, ing:{}, timer:null}; keepAwake(true); renderCook(); }
+function startCook(ref){ const r = recipeFromRef(ref); if (!r || !(r.steps||[]).length) return; $("#overlay").innerHTML = ""; COOK = {r, step:0, ing:{}, timer:null}; keepAwake(true); renderCook(); }
 function stopCook(){ COOK = null; clearInterval(tick); tick = null; keepAwake(false); $("#cookroot").innerHTML = ""; }
 const minsIn = s => { const out = []; const re = /(\d+(?:\.\d+)?)(?:\s*(?:[–-]|to)\s*(\d+(?:\.\d+)?))?\s*(min(?:ute)?s?|hours?|hrs?)\b/gi; let m;
   while ((m = re.exec(s))) { const f = /h/i.test(m[3]) ? 60 : 1; out.push(Math.round(+m[1]*f)); if (m[2]) out.push(Math.round(+m[2]*f)); }
   return [...new Set(out)].filter(n => n > 0 && n <= 600); };
 function renderCook(){
-  if (!COOK) return; const r = R[COOK.k], i = COOK.step, mins = minsIn(r.steps[i]);
+  if (!COOK) return; const r = COOK.r, i = COOK.step, mins = minsIn(r.steps[i]);
   const chips = (mins.length ? mins : [5,10,15]).map(n => `<button class="chip" data-act="timer" data-id="${n}">${n >= 60 ? `${Math.floor(n/60)} hr${n%60 ? " " + n%60 + " min" : ""}` : n + " min"}</button>`).join("");
   $("#cookroot").innerHTML = `<div class="cook" role="dialog" aria-modal="true" aria-label="Cooking ${esc(r.title)}"><div class="cook-top"><h3>${esc(r.title)}</h3><span class="note" style="margin:0">Step ${i+1} of ${r.steps.length}</span><button class="close" data-act="cookclose" aria-label="Close cooking mode">${svg("close")}</button></div>
     <div class="cook-body"><div class="cook-ing"><p class="eyebrow">Ingredients</p><div class="list">${r.ingredients.map((x,j) => x.startsWith("## ") ? `<div class="s" style="padding:10px 0 2px;font-style:italic;color:var(--berry);font-family:var(--display);font-size:18px">${esc(x.slice(3))}</div>` : `<div class="row ${COOK.ing[j]?"done":""}">${ck(COOK.ing[j],"cing",j,x)}<div class="main"><div class="t">${esc(x)}</div></div></div>`).join("")}</div></div>
@@ -404,8 +415,8 @@ function ring(){ try { audioCtx = audioCtx || new (window.AudioContext || window
   [0,0.35,0.7,1.4,1.75,2.1].forEach(dt => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = "sine"; o.frequency.value = 880; g.gain.setValueAtTime(0.0001, t0+dt); g.gain.exponentialRampToValueAtTime(0.4, t0+dt+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0+dt+0.3); o.connect(g).connect(audioCtx.destination); o.start(t0+dt); o.stop(t0+dt+0.32); }); } catch(e) {}
   if (navigator.vibrate) { try { navigator.vibrate([300,150,300,150,600]); } catch(e) {} } }
 
-async function ingredientsToGrocery(k){
-  const r = R[k]; if (!r) return; const L = findListByName("grocery") || sortedLists()[0]; if (!L) return toast("Make a Grocery list first.");
+async function ingredientsToGrocery(ref){
+  const r = recipeFromRef(ref); if (!r || !(r.ingredients||[]).length) return; const L = findListByName("grocery") || sortedLists()[0]; if (!L) return toast("Make a Grocery list first.");
   const have = new Set(openItems(L.id).map(i => norm(i.text))); const ings = r.ingredients.filter(i => !i.startsWith("## ") && !have.has(norm(i)));
   const base = Date.now(); await Promise.all(ings.map((text, i) => add("items", {listId:L.id, text, note:r.title, done:false, createdAt: base + i})));
   toast(`${ings.length} ingredient${ings.length===1?"":"s"} added to ${L.name}`);
@@ -531,7 +542,8 @@ async function applyActions(actions){
           if (a.type === "remove_items") { if (await removed("items", it)) n++; } else { const wantDone = a.type === "check_items"; if (!!it.done !== wantDone && await updated("items", it, {done:wantDone, doneAt: wantDone ? Date.now() : null})) n++; } }
         if (n) done.push(`${n} ${a.type === "remove_items" ? "removed from" : a.type === "check_items" ? "checked off" : "put back on"} ${L ? L.name : "lists"}`); }
       else if (a.type === "set_dinner") { const d = String(a.date||"").slice(0,10); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { skipped.push("Dinner needs a date"); continue; }
-        const cur = S.dinners[d], data = {title:String(a.title||"").trim(), recipe: R[a.recipe] ? a.recipe : recipeFor(a.title), note:String(a.note||""), time:String(a.time||"")};
+        const cur = S.dinners[d], idea = fuzzy(S.items.filter(i => i.listId === "ideas"), a.title, "text"), data = {title:String(a.title||"").trim(), recipe: R[a.recipe] ? a.recipe : recipeFor(a.title), note:String(a.note||""), time:String(a.time||"") || (idea && idea.time) || ""};
+        if (idea) { data.link = idea.link || ""; data.ingredients = idea.ingredients || []; data.steps = idea.steps || []; data.servings = idea.servings || ""; }
         if (!data.title) { skipped.push("Dinner needs a name"); continue; }
         if (cur) { await updated("dinners", {id:d, ...cur}, data); } else { const ok = await w("dinners", d, data, "set"); if (ok) undo.push({col:"dinners", id:d, prev:null}); }
         done.push(`${fmt(d,{weekday:"short"})}: ${data.title}`); }
@@ -582,8 +594,9 @@ document.addEventListener("click", async ev => {
     case "item": { const x = S.items.find(i => i.id === id); if (x) w("items", id, {done:!x.done, doneAt: x.done ? null : Date.now()}); break; }
     case "clearchecked": { const its = listItems(id).filter(i => i.done); await Promise.all(its.map(i => w("items", i.id, null, "delete"))); toast(`Cleared ${its.length}`); break; }
     case "plan": U.pickIdea = id || null; break;
-    case "pickday": { const title = b.dataset.idea || "", idea = S.items.find(i => i.id === U.pickIdea) || {}; if (title) { const cur = S.dinners[id] || {}; const rk = idea.recipe && R[idea.recipe] ? idea.recipe : recipeFor(title); await w("dinners", id, {...cur, title, recipe: rk, note: cur.note || "", time: idea.time || "", link: idea.link || ""}, "set"); toast(`${title} on ${fmt(id,{weekday:"long"})}`); } U.pickIdea = null; break; }
-    case "editdinner": U.view = "dinners"; ls.set("hph_view","dinners"); U.weekOff = Math.round((pd(weekStart(id)) - pd(weekStart(todayISO()))) / (7*864e5)); U.editDinner = id; U.pickIdea = null; break;
+    case "pickday": { const title = b.dataset.idea || "", idea = S.items.find(i => i.id === U.pickIdea) || {}; if (title) { const cur = S.dinners[id] || {}; const rk = idea.recipe && R[idea.recipe] ? idea.recipe : recipeFor(title); await w("dinners", id, {...cur, title, recipe: rk, note: cur.note || "", time: idea.time || "", link: idea.link || "", ingredients: idea.ingredients || [], steps: idea.steps || [], servings: idea.servings || ""}, "set"); toast(`${title} on ${fmt(id,{weekday:"long"})}`); } U.pickIdea = null; break; }
+    case "dayrecipe": showRecipe("dinner:" + id); return;
+    case "editdinner": $("#overlay").innerHTML = ""; U.view = "dinners"; ls.set("hph_view","dinners"); U.weekOff = Math.round((pd(weekStart(id)) - pd(weekStart(todayISO()))) / (7*864e5)); U.editDinner = id; U.pickIdea = null; break;
     case "canceldinner": U.editDinner = null; break;
     case "cleardinner": await w("dinners", id, null, "delete"); U.editDinner = null; break;
     case "week": U.weekOff = id === "0" ? 0 : U.weekOff + (+id); U.editDinner = null; U.pickIdea = null; break;
@@ -609,7 +622,7 @@ document.addEventListener("click", async ev => {
     case "cookclose": stopCook(); return;
     case "step": COOK.step = +id; renderCook(); return;
     case "stepprev": if (COOK && COOK.step > 0) { COOK.step--; renderCook(); } return;
-    case "stepnext": if (COOK && COOK.step < R[COOK.k].steps.length-1) { COOK.step++; renderCook(); } return;
+    case "stepnext": if (COOK && COOK.step < COOK.r.steps.length-1) { COOK.step++; renderCook(); } return;
     case "cing": if (COOK) { COOK.ing[id] = !COOK.ing[id]; b.setAttribute("aria-checked", String(!!COOK.ing[id])); b.innerHTML = COOK.ing[id] ? CHECK : ""; b.closest(".row").classList.toggle("done", !!COOK.ing[id]); } return;
     case "timer": startTimer(id); return;
     case "timerstop": if (COOK) { COOK.timer = null; clearInterval(tick); renderCook(); } return;
