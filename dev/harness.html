@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<script>
+/* Dev-only mock of the artifact runtime: an in-memory db seeded from /dev-seed.json and a canned `sample`. Never published. */
+(() => {
+  const store = {}, subs = {};
+  const seedP = fetch("/dev-seed.json").then(r => r.json()).then(s => { Object.assign(store, s); });
+  const fire = c => (subs[c]||[]).forEach(cb => cb({docs:Object.entries(store[c]||{}).map(([id,d]) => ({id, data:() => ({...d}), exists:true}))}));
+  const db = { collection: c => ({
+      onSnapshot: (cb, err) => { (subs[c] ||= []).push(cb); seedP.then(() => fire(c)); return () => {}; },
+      doc: id => ({ id, set: async d => { (store[c] ||= {})[id] = JSON.parse(JSON.stringify(d)); fire(c); }, update: async d => { store[c][id] = {...store[c][id], ...d}; fire(c); }, delete: async () => { delete store[c][id]; fire(c); }, get: async () => ({exists: !!store[c][id], data: () => ({...store[c][id]})}) }) }) };
+  const sample = async () => ({text:"ok"});
+  sample.json = async (input) => { window.__lastPrompt = input; const note = /NOTE: """([\s\S]*)"""/.exec(input)[1];
+    if (/costco/i.test(note)) return {reply:"Added paper towels and olive oil to Costco.", actions:[{type:"add_items",list:"Costco",items:[{text:"Paper towels"},{text:"Olive oil"}]}]};
+    if (/thursday/i.test(note)) return {reply:"Thursday is tacos.", actions:[{type:"set_dinner",date:"2026-10-29",title:"Tacos",recipe:"",note:""},{type:"rsvp",event:"",name:"Nick",status:"no"},{type:"complete_task",match:"turducken"}]};
+    return {reply:"Nothing to do there.", actions:[]}; };
+  window.claude = { use: async n => n === "db" ? db : n === "sample" ? sample : null };
+  window.__store = store;
+})();
+</script></head><body>
+<title>Hakeman Patterson House</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400;1,500&family=Jost:wght@400;500&display=swap">
+<link rel="stylesheet" href="/app.css">
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><span class="brand-name">Hakeman Patterson</span><span class="brand-sub">House</span></div>
+    <nav class="nav" id="nav" role="tablist" aria-label="Sections"></nav>
+    <div class="rail-foot" id="railfoot"></div>
+  </aside>
+  <div class="content">
+    <header class="capture" id="capture"><div class="inner"></div></header>
+    <main class="scroller" id="main"><div class="wrap"><p class="status">Loading the house…</p></div></main>
+  </div>
+</div>
+<div id="overlay"></div>
+<div id="cookroot"></div>
+<script src="/cookbook.js"></script>
+<script src="/app.js"></script>
+</body></html>
