@@ -136,7 +136,7 @@ function vToday(){
   const soon = S.plans.filter(p => p.date && daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14).sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
   const coming = `<div class="card soft">${soon.length ? `<div class="list">${soon.map(p => planRow(p)).join("")}</div>` : `<div class="empty" style="padding:12px 4px"><b>Nothing on the horizon</b>Trips, appointments, nights out. Add one below or say "New York next Sunday".</div>`}
     <form class="add" data-form="plan" style="margin-top:10px"><input type="text" id="np" placeholder="e.g. New York for the day" required><input type="date" id="npd" value="${t}"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button><button class="btn quiet" type="button" data-act="view" data-id="plans">All plans</button></form></div>`;
-  return `<div class="ph"><div><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div></div>
+  return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div></div>
     <div class="today-grid"><div class="card dinner-hero">${hero}${strip}</div>${host}</div>
     <h2 class="eyebrow">Coming up</h2>${coming}
     <h2 class="eyebrow">Lists</h2>${lcards}

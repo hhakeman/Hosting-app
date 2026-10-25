@@ -25,6 +25,8 @@ h1,h2,h3{text-wrap:balance}
 .app{flex:1 1 auto;min-height:0;display:flex}
 .rail{flex:0 0 var(--rail);display:flex;flex-direction:column;gap:6px;padding:26px 14px 18px max(14px,env(safe-area-inset-left,0px));border-right:1px solid var(--line);background:var(--bg)}
 .brand{padding:0 12px 18px}
+.mark{width:52px;height:52px;display:block;margin-bottom:12px;--mark-bg:var(--raised);--mark-line:var(--line);--mark-ink:var(--green);--mark-heart:var(--clay)}
+.ph .mark{display:none}
 .brand-name{display:block;font-family:var(--display);font-weight:500;font-size:26px;line-height:1.05;color:var(--ink)}
 .brand-sub{display:block;margin-top:4px;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
 .nav{display:flex;flex-direction:column;gap:4px}
@@ -301,6 +303,7 @@ details.cook summary{cursor:pointer;font-weight:500;color:var(--green);padding:8
   .app{flex-direction:column}
   .rail{order:2;flex:none;flex-direction:row;gap:0;padding:6px max(6px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left,0px));border-right:0;border-top:1px solid var(--line);background:var(--raised)}
   .brand,.rail-foot{display:none}
+  .ph .mark{display:block;width:44px;height:44px;margin:0 0 8px}
   .nav{flex-direction:row;flex:1}
   .nav-item{flex:1 1 0;min-width:0;flex-direction:column;gap:3px;padding:6px 2px;font-size:11px;border-radius:12px;min-height:50px}
   .nav-item .n{display:none}
