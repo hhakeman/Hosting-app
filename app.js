@@ -1,4 +1,4 @@
-/* Hakeman Patterson House — app logic.
+/* Hakeman House — app logic.
    Sections: 1 core + state · 2 Today, Lists, Dinners · 3 Hosting (ported engine) · 4 Cookbook + cooking mode · 5 Capture (voice + Claude sorting) · 6 events + boot */
 (() => {
 "use strict";

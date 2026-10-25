@@ -1,4 +1,4 @@
-# Hakeman Patterson House
+# Hakeman House
 
 The household app that runs on the iPad on the kitchen counter. Lists, the week's dinners, holiday hosting, and the family cookbook, with a capture bar that takes a spoken or typed note and sorts it into the right place.
 
