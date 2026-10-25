@@ -154,7 +154,7 @@ function vToday(){
 /* ───────────────────────── Plans (coming up) ───────────────────────── */
 function planRow(p){ const d = daysTo(p.date), multi = p.endDate && p.endDate !== p.date;
   const when = `${d===0?"Today":d===1?"Tomorrow":d<0?"Started "+fmt(p.date):fmt(p.date,{weekday:"long",month:"short",day:"numeric"})}${multi ? " – " + fmt(p.endDate,{month:"short",day:"numeric"}) : ""}${p.time ? " · " + esc(p.time) : ""}`;
-  return `<div class="row plan"><span class="dot"></span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${when}${p.note ? " · " + esc(p.note) : ""}</div></div>${d > 1 && d <= 14 ? `<span class="pill">in ${d} days</span>` : ""}${del("plans", p.id)}</div>`; }
+  return `<div class="sw" data-col="plans" data-id="${p.id}"><div class="row plan"><span class="dot"></span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${when}${p.note ? " · " + esc(p.note) : ""}</div></div>${d > 1 && d <= 14 ? `<span class="pill">in ${d} days</span>` : ""}${del("plans", p.id)}</div><button class="sw-del" data-act="swdel" data-col="plans" data-id="${p.id}" tabindex="-1">Delete</button></div>`; }
 function vPlans(){
   const t = todayISO(), all = S.plans.slice().sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
   const up = all.filter(p => (p.endDate || p.date) >= t), past = all.filter(p => (p.endDate || p.date) < t).reverse();
@@ -177,10 +177,10 @@ function vLists(){
   const L = S.lists.find(l => l.id === U.listId), items = listItems(L.id), open = items.filter(i => !i.done), done = items.filter(i => i.done), isIdeas = L.id === "ideas" || /idea/i.test(L.name);
   const week = [0,1,2,3,4,5,6].map(i => addDays(todayISO(), i));
   const row = i => { const rk = i.recipe && R[i.recipe] ? i.recipe : (isIdeas ? recipeFor(i.text) : ""), tm = i.time || (rk && recipeTime(rk));
-    return `<div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk || hasContent(i) ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : hasContent(i) ? `<button class="pill link" data-act="recipe" data-id="item:${i.id}">Recipe</button>` : ""}${linkPill(i.link)}</div>` : ""}
+    return `<div class="sw" data-col="items" data-id="${i.id}"><div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk || hasContent(i) ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : hasContent(i) ? `<button class="pill link" data-act="recipe" data-id="item:${i.id}">Recipe</button>` : ""}${linkPill(i.link)}</div>` : ""}
     ${U.editList ? `<div class="edit"><input type="text" id="it-${i.id}" value="${esc(i.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 160px"><input type="text" id="il-${i.id}" value="${esc(i.link||"")}" placeholder="Link (Pinterest, recipe site)" style="flex:1 1 200px"><button class="btn sm ghost" data-act="saveitem" data-id="${i.id}">Save</button></div>` : ""}
     ${isIdeas && !i.done && U.pickIdea === i.id ? `<div class="daypick">${week.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(i.text)}">${d===todayISO()?"Tonight":fmt(d,{weekday:"short"})}</button>`).join("")}<button class="chip" data-act="plan" data-id="">Cancel</button></div>` : ""}</div>
-    ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${U.editList ? del("items", i.id) : ""}</div>`; };
+    ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${U.editList ? del("items", i.id) : ""}</div><button class="sw-del" data-act="swdel" data-col="items" data-id="${i.id}" tabindex="-1">Delete</button></div>`; };
   const main = `<div class="lhead"><h2>${esc(L.name)}</h2><div class="tools">${safeUrl(L.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(L.link))}" target="_blank" rel="noopener">${esc(linkLabel(L.link))} board ↗</a>` : ""}${done.length ? `<button class="btn sm ghost" data-act="clearchecked" data-id="${L.id}">Clear ${done.length} checked</button>` : ""}<button class="btn sm ${U.editList?"":"quiet"}" data-act="editlist">${U.editList ? "Done" : "Edit"}</button>${U.editList ? `<button class="btn sm clay" data-act="dellist" data-id="${L.id}">${U.armed==="list"+L.id ? "Really delete?" : "Delete list"}</button>` : ""}</div></div>
     ${U.editList ? `<form class="add" data-form="listlink" data-id="${L.id}" style="margin:0 0 10px"><input type="text" id="ll" value="${esc(L.link||"")}" placeholder="Board or page link for this list (e.g. your Pinterest board)"><button class="btn sm ghost">Save link</button></form>` : ""}
     <form class="quickadd" data-form="item"><input type="text" id="ni" placeholder="${isIdeas ? "A dinner idea…" : "Add to " + esc(L.name) + "…"}" aria-label="Add item" autocomplete="off">${isIdeas ? `<input type="text" id="ni-time" placeholder="Time" aria-label="How long it takes" style="flex:0 1 110px">` : ""}<button class="rbtn primary" aria-label="Add">${svg("plus")}</button></form>
@@ -615,6 +615,7 @@ document.addEventListener("click", async ev => {
     case "saveroom": w("rooms", id, {guests:$("#rg-"+id).value.trim(), nights:$("#rn-"+id).value.trim()}); toast("Saved"); break;
     case "toggle": U.open[id] = !U.open[id]; break;
     case "savedish": w("dishes", id, {who:$("#who-"+id).value.trim(), makeAhead:$("#ma-"+id).value.trim()}); U.open[id] = false; break;
+    case "swdel": w(b.dataset.col, id, null, "delete"); toast("Deleted"); break;
     case "del": { const k = b.dataset.col+id; if (U.armed === k) { U.armed = null; w(b.dataset.col, id, null, "delete"); } else U.armed = k; break; }
     case "recipe": showRecipe(id); return;
     case "rcat": U.rcat = id; break;
@@ -653,6 +654,17 @@ document.addEventListener("submit", async e => {
   if (f === "dish") { const r = v("#ndr"), n = v("#nd") || (R[r] && R[r].title); if (n) add("dishes", {eventId:v("#nde"), name:n, recipe:r, course:v("#ndc"), order:Date.now()%1e7, ready:false}); }
   e.target.reset(); render();
 });
+
+/* Swipe a list row left to reveal Delete. Vertical scrolling is untouched (touch-action: pan-y). */
+let SW = null;
+const swReset = except => document.querySelectorAll(".sw.open").forEach(el => { if (el !== except) el.classList.remove("open"); });
+document.addEventListener("pointerdown", e => { const el = e.target.closest(".sw"); if (!el || e.pointerType === "mouse" || e.target.closest("button, input, a")) { if (!el) swReset(); return; }
+  SW = {el, x:e.clientX, y:e.clientY, dx:0, moved:false, open:el.classList.contains("open")}; el.querySelector(".row").style.transition = "none"; }, {passive:true});
+document.addEventListener("pointermove", e => { if (!SW) return; const dx = e.clientX - SW.x, dy = e.clientY - SW.y; if (!SW.moved && Math.abs(dy) > Math.abs(dx)) { SW = null; return; }
+  if (Math.abs(dx) > 6) SW.moved = true; if (!SW.moved) return; SW.dx = Math.max(-120, Math.min(SW.open ? 96 : 0, dx + (SW.open ? -96 : 0))); SW.el.querySelector(".row").style.transform = `translateX(${SW.dx}px)`; }, {passive:true});
+const swEnd = () => { if (!SW) return; const row = SW.el.querySelector(".row"); row.style.transition = ""; row.style.transform = ""; if (SW.moved) { swReset(SW.el); SW.el.classList.toggle("open", SW.dx < -48); SW.el.dataset.justSwiped = "1"; setTimeout(() => delete SW_last.dataset.justSwiped, 300); } const SW_last = SW.el; SW = null; };
+document.addEventListener("pointerup", swEnd, {passive:true}); document.addEventListener("pointercancel", swEnd, {passive:true});
+document.addEventListener("click", e => { const el = e.target.closest(".sw"); if (el && el.dataset.justSwiped) { e.stopPropagation(); e.preventDefault(); } }, true);
 
 renderCapture(); render();
 (async () => {

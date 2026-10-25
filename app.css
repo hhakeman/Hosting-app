@@ -111,6 +111,12 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .cat-invites{background:var(--gold-soft);color:var(--gold)}.cat-reservations{background:var(--berry-soft);color:var(--berry)}
 .cat-rooms{background:var(--blue-soft);color:var(--blue)}.cat-house{background:var(--chip);color:var(--muted)}.cat-food{background:var(--green-soft);color:var(--green)}
 .row.overdue .t{color:var(--warn)}
+.sw{position:relative;overflow:hidden;touch-action:pan-y;border-bottom:1px solid var(--line)}
+.sw:last-child{border-bottom:0}
+.sw .row{position:relative;z-index:1;background:var(--card);border-bottom:0;transition:transform .18s ease-out}
+.sw.open .row{transform:translateX(-96px)}
+.sw-del{position:absolute;top:0;right:0;bottom:0;width:96px;border:0;background:var(--warn);color:#fff;font:500 14px var(--sans);cursor:pointer;z-index:0}
+.card:not(.soft) .sw .row{background:var(--raised)}
 
 /* Controls */
 .btn{background:var(--green);color:#fff;border:0;border-radius:var(--pill);padding:12px 20px;font:500 15px var(--sans);cursor:pointer;min-height:46px;white-space:nowrap}
