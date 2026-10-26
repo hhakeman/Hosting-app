@@ -171,7 +171,7 @@ function wxCard(){
   if (WX.state === "off") return "";
   const head = `<p class="eyebrow">Philadelphia</p>`;
   if (WX.state === "approve") return `<div class="wx card soft">${head}<div class="wx-msg">The weather needs your OK once.</div><div><button class="btn sm" data-act="wxallow">Show the weather</button></div></div>`;
-  if (WX.state === "connect") return `<div class="wx card soft">${head}<div class="wx-msg">${esc(WX.msg)}</div></div>`;
+  if (WX.state === "connect") return ""; /* a household member without the AccuWeather connector simply doesn't see the card */
   const c = WX.cur && WX.cur.currentConditions, d = (WX.daily && WX.daily.dailyForecast) || [];
   if (!c && !d.length) return `<div class="wx card soft">${head}<div class="wx-msg">${WX.state === "error" ? "The weather isn't loading right now. It will try again shortly." : "Checking the weather…"}</div></div>`;
   const t0 = d[0], isDay = c ? c.isDayTime !== false : true;
@@ -241,7 +241,7 @@ function calCard(){
   if (CAL.state === "off") return "";
   const head = `<p class="eyebrow">Today's calendar</p>`;
   if (CAL.state === "approve") return `<div class="card soft cal">${head}<div class="wx-msg">Your Outlook calendar needs your OK once.</div><div><button class="btn sm" data-act="calallow">Show my calendar</button></div></div>`;
-  if (CAL.state === "connect") return `<div class="card soft cal">${head}<div class="wx-msg">${esc(CAL.msg)}</div></div>`;
+  if (CAL.state === "connect") return ""; /* a household member without the Microsoft 365 connector simply doesn't see the card */
   if (!CAL.today) return `<div class="card soft cal">${head}<div class="wx-msg">${CAL.state === "error" ? "Your calendar isn't loading right now. It will try again shortly." : "Checking your calendar…"}</div></div>`;
   const t = todayISO(), now = new Date(), nowMin = now.getHours()*60 + now.getMinutes();
   const td = calDay(CAL.today, t), left = td.timed.filter(x => x.en > nowMin);
