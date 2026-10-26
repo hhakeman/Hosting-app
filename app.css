@@ -107,6 +107,14 @@ a.pill{text-decoration:none}a.pill.ext:hover{text-decoration:underline;text-unde
 .row.plan .dot{flex:0 0 12px;width:12px;height:12px;border-radius:var(--pill);background:var(--clay);margin:9px 9px 0}
 .idea span{display:block;font-size:11px;color:var(--muted);letter-spacing:.04em;margin-top:1px}
 .idea[aria-pressed="true"] span{color:rgba(255,255,255,.8)}
+.idea{display:inline-flex;align-items:center;gap:10px;padding-left:8px}
+.idea .plus{flex:none;width:28px;height:28px;border-radius:var(--pill);background:var(--green-soft);color:var(--green);display:grid;place-items:center;font:400 20px/1 var(--sans)}
+.idea[aria-pressed="true"] .plus{background:rgba(255,255,255,.2);color:#fff}
+.idea .idea-t{display:flex;flex-direction:column;align-items:flex-start;text-align:left}
+.nightpick{margin:4px 0 16px;padding:14px 16px;background:var(--card);border-radius:16px}
+.nightpick .eyebrow{margin-bottom:8px}
+.nightpick .daypick{margin-top:0}
+.nightpick .chip span{color:var(--muted);margin-left:4px;font-weight:400}
 a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .cat-invites{background:var(--gold-soft);color:var(--gold)}.cat-reservations{background:var(--berry-soft);color:var(--berry)}
 .cat-rooms{background:var(--blue-soft);color:var(--blue)}.cat-house{background:var(--chip);color:var(--muted)}.cat-food{background:var(--green-soft);color:var(--green)}
