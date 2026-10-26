@@ -144,12 +144,164 @@ function vToday(){
   const soon = S.plans.filter(p => p.date && daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14).sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
   const coming = `<div class="card soft">${soon.length ? `<div class="list">${soon.map(p => planRow(p)).join("")}</div>` : `<div class="empty" style="padding:12px 4px"><b>Nothing on the horizon</b>Trips, appointments, nights out. Add one below or say "New York next Sunday".</div>`}
     <form class="add" data-form="plan" style="margin-top:10px"><input type="text" id="np" placeholder="e.g. New York for the day" required><input type="date" id="npd" value="${t}"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button><button class="btn quiet" type="button" data-act="view" data-id="plans">All plans</button></form></div>`;
-  return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div></div>
+  return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div>${wxCard()}</div>
+    <div class="widgets">${calCard()}${habitsCard()}</div>
     <div class="today-grid"><div class="card dinner-hero">${hero}${strip}</div>${host}</div>
     <h2 class="eyebrow">Coming up</h2>${coming}
     <h2 class="eyebrow">Lists</h2>${lcards}
     ${due.length ? `<h2 class="eyebrow">Hosting to-dos this week</h2>${dueHtml}` : ""}`;
 }
+
+/* ───────────────────────── Weather (AccuWeather connector, Philadelphia) ───────────────────────── */
+const WX_SERVER = "AccuWeather®", WX_IN = {queryParams:{locationKey:"2627552", unit:"imperial", lang:"en"}};
+const WX = {mcp:null, cur:null, daily:null, state:"off", msg:"", at:0, stale:false};
+const WXI = {
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  partly:'<path d="M8 2.5V4M2.5 8H4M4.1 4.1l1 1M11.9 4.1l-1 1"/><path d="M11 9.5A3.5 3.5 0 0 0 4.6 10.8"/><path d="M8 20h9a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 8 13.2 3.4 3.4 0 0 0 8 20z"/>',
+  cloud:'<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 11 3.5 3.5 0 0 0 7 18z"/>',
+  rain:'<path d="M7 15h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 8 3.5 3.5 0 0 0 7 15z"/><path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5"/>',
+  snow:'<path d="M7 15h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 8 3.5 3.5 0 0 0 7 15z"/><path d="M8.5 18.5h.01M12 19.5h.01M15.5 18.5h.01M10 21.5h.01M14 21.5h.01"/>',
+  storm:'<path d="M7 15h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 8 3.5 3.5 0 0 0 7 15z"/><path d="M12.5 15.5l-2 3.5h3l-2 3.5"/>'
+};
+const wxKind = c => { c = +c; if ([15,16,17,41,42].includes(c)) return "storm"; if ((c>=12 && c<=18) || c===39 || c===40) return "rain"; if ((c>=19 && c<=29) || c===43 || c===44) return "snow";
+  if (c===33 || c===34) return "moon"; if (c>=35 && c<=38) return "partly"; if (c>=6 && c<=11) return "cloud"; if (c>=3 && c<=5) return "partly"; return "sun"; };
+const wxSvg = c => `<svg viewBox="0 0 24 24" aria-hidden="true">${WXI[wxKind(c)]}</svg>`;
+function wxCard(){
+  if (WX.state === "off") return "";
+  const head = `<p class="eyebrow">Philadelphia</p>`;
+  if (WX.state === "approve") return `<div class="wx card soft">${head}<div class="wx-msg">The weather needs your OK once.</div><div><button class="btn sm" data-act="wxallow">Show the weather</button></div></div>`;
+  if (WX.state === "connect") return `<div class="wx card soft">${head}<div class="wx-msg">${esc(WX.msg)}</div></div>`;
+  const c = WX.cur && WX.cur.currentConditions, d = (WX.daily && WX.daily.dailyForecast) || [];
+  if (!c && !d.length) return `<div class="wx card soft">${head}<div class="wx-msg">${WX.state === "error" ? "The weather isn't loading right now. It will try again shortly." : "Checking the weather…"}</div></div>`;
+  const t0 = d[0], isDay = c ? c.isDayTime !== false : true;
+  const temp = c ? c.temperatureValue : t0.day.temperature, code = c ? c.iconCode : t0.day.icon, cond = c ? c.phrase : t0.day.phrase;
+  const rain = t0 ? Math.max(t0.day.rainProbabilityValue || 0, t0.night.rainProbabilityValue || 0) : 0;
+  const say = t0 ? (isDay ? t0.day.longPhrase : "Tonight: " + t0.night.longPhrase) : "";
+  const next = d.slice(1, 4).map(x => `<div><b>${esc(x.dayOfWeek || "")}</b>${wxSvg(x.day.icon)}<span>${x.day.temperature}°<i>${x.night.temperature}°</i></span>${(x.day.rainProbabilityValue || 0) >= 40 ? `<em>${x.day.rainProbabilityValue}% rain</em>` : ""}</div>`).join("");
+  const upd = WX.stale && WX.at ? `<div class="wx-say">Last updated ${new Date(WX.at).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</div>` : "";
+  return `<div class="wx card soft">${head}<div class="wx-now">${wxSvg(code)}<div class="wx-temp">${temp}°</div><div><div class="wx-cond">${esc(cond || "")}</div>${t0 ? `<div class="wx-hl">H ${t0.day.temperature}° · L ${t0.night.temperature}°${rain >= 30 ? ` · <span class="wx-rain">${rain}% rain</span>` : ""}</div>` : ""}</div></div>
+    ${say ? `<div class="wx-say">${esc(say)}</div>` : ""}${next ? `<div class="wx-next">${next}</div>` : ""}${upd}</div>`;
+}
+function wxErr(e){ const code = e && e.code;
+  const retract = () => { WX.cur = null; WX.daily = null; };
+  if (code === "approval_required") { retract(); WX.state = "approve"; }
+  else if (code === "server_not_connected" || code === "selection_required" || code === "server_not_found") { retract(); WX.state = "connect"; WX.msg = code === "selection_required" ? "Choose which AccuWeather connection to use when claude.ai asks, then reopen this page." : "Add AccuWeather in claude.ai Settings → Connectors to see the weather here."; }
+  else if (code === "needs_reauth") { retract(); WX.state = "connect"; WX.msg = "Reconnect AccuWeather in claude.ai Settings → Connectors to see the weather here."; }
+  else if (["not_in_manifest","blocked_by_policy","not_granted","capability_disabled","capability_removed","bad_request","transform_error","user_changed"].includes(code)) { retract(); WX.state = "off"; }
+  else { if (WX.cur || WX.daily) { WX.stale = true; WX.state = "ok"; } else WX.state = "error"; }
+}
+const wxHandler = key => ev => {
+  if (ev.type === "data") { const p = ev.result && ev.result.payload; if (p && typeof p === "object") { WX[key] = p; WX.at = (ev.result.cache && ev.result.cache.storedAt) || Date.now(); WX.state = "ok"; WX.stale = false; } }
+  else wxErr(ev.error);
+  if (U.view === "today") render();
+};
+function wxStart(m){ if (!m) return; WX.mcp = m; WX.state = "loading"; if (U.view === "today") render();
+  m.watchTool(WX_SERVER, "widgets-current-claude", WX_IN, wxHandler("cur"), {refetchInterval: 30*60*1000, cache:{staleTime: 10*60*1000, gcTime: 6*3600*1000}});
+  m.watchTool(WX_SERVER, "widgets-daily-claude", WX_IN, wxHandler("daily"), {refetchInterval: 3*3600*1000, cache:{staleTime: 60*60*1000, gcTime: 24*3600*1000}}); }
+document.addEventListener("click", async e => { if (!e.target.closest('[data-act="wxallow"]') || !WX.mcp) return;
+  WX.state = "loading"; render();
+  try { const r = await WX.mcp.callTool(WX_SERVER, "widgets-current-claude", WX_IN); if (r && r.payload && typeof r.payload === "object") { WX.cur = r.payload; WX.at = Date.now(); WX.stale = false; WX.state = "ok"; }
+    WX.mcp.invalidate(WX_SERVER).catch(() => {}); }
+  catch (err) { wxErr(err); }
+  render(); });
+
+/* ───────────────────────── Calendar (Microsoft 365 / Outlook) ───────────────────────── */
+const CAL_SERVER = "Microsoft 365", CAL_TOOL = "outlook_calendar_search";
+const CAL = {mcp:null, day:null, today:null, tomorrow:null, state:"off", msg:"", stale:false, un:[]};
+const calIn = (a, b) => ({query:"*", afterDateTime:a + "T00:00:00", beforeDateTime:b + "T00:00:00", order:"oldest", limit:25, offset:0});
+/* The connector answers with one JSON object per event (plus a trailing {totalResultCount}), as separate text blocks or run together in one. */
+function calParse(result){
+  const out = [], push = o => { if (Array.isArray(o)) o.forEach(push); else if (o && typeof o === "object") { if (o.subject !== undefined || o.start) out.push(o); else if (Array.isArray(o.events)) o.events.forEach(push); else if (Array.isArray(o.value)) o.value.forEach(push); } };
+  const split = txt => { let depth = 0, inStr = false, esc_ = false, start = -1;
+    for (let i = 0; i < txt.length; i++) { const ch = txt[i];
+      if (inStr) { if (esc_) esc_ = false; else if (ch === "\\") esc_ = true; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true; else if (ch === "{") { if (depth++ === 0) start = i; } else if (ch === "}") { if (--depth === 0 && start >= 0) { try { push(JSON.parse(txt.slice(start, i + 1))); } catch (e) {} start = -1; } } } };
+  if (result && result.structuredContent && typeof result.structuredContent === "object") push(result.structuredContent);
+  if (!out.length && result && Array.isArray(result.content)) result.content.forEach(b => { if (b && b.type === "text" && typeof b.text === "string") { try { push(JSON.parse(b.text)); } catch (e) { split(b.text); } } });
+  return out;
+}
+const calWall = s => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(String(s || "")); return m ? {date:m[1], min:+m[2]*60 + +m[3]} : null; };
+const calTime = min => { const h = Math.floor(min/60), m = min % 60; return `${h % 12 || 12}${m ? ":" + String(m).padStart(2,"0") : ""}${h < 12 ? "am" : "pm"}`; };
+const calWhere = l => { l = String(l || "").trim(); if (!l) return ""; if (/teams/i.test(l)) return "Teams"; if (/zoom/i.test(l)) return "Zoom"; if (/meet\.google|google meet/i.test(l)) return "Meet"; return l.length > 28 ? l.slice(0, 27) + "…" : l; };
+function calDay(list, d){
+  const evs = (list || []).filter(e => !e.isCancelled), allDay = [], timed = [];
+  evs.forEach(e => { const s = calWall(e.start && e.start.dateTime), en = calWall(e.end && e.end.dateTime); if (!s) return;
+    if (e.isAllDay) { if (s.date <= d && (!en || en.date > d)) allDay.push(e); }
+    else if (s.date === d) timed.push({e, s:s.min, en: en && en.date === d ? en.min : 24*60}); });
+  timed.sort((a,b) => a.s - b.s);
+  return {allDay, timed};
+}
+function calRows(timed, nowMin){
+  return timed.map(x => { const past = nowMin != null && x.en <= nowMin, now = nowMin != null && x.s <= nowMin && x.en > nowMin, href = safeUrl(x.e.webLink), where = calWhere(x.e.location);
+    const inner = `<span class="cal-t">${calTime(x.s)}</span><span class="cal-m"><span class="cal-s">${esc(x.e.subject || "(No title)")}</span>${where || now ? `<span class="cal-w">${now ? `<b>Now</b>${where ? " · " : ""}` : ""}${esc(where)}</span>` : ""}</span>`;
+    return href ? `<a class="cal-row ${past ? "past" : ""} ${now ? "now" : ""}" href="${esc(href)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="cal-row ${past ? "past" : ""} ${now ? "now" : ""}">${inner}</div>`; }).join("");
+}
+function calCard(){
+  if (CAL.state === "off") return "";
+  const head = `<p class="eyebrow">Today's calendar</p>`;
+  if (CAL.state === "approve") return `<div class="card soft cal">${head}<div class="wx-msg">Your Outlook calendar needs your OK once.</div><div><button class="btn sm" data-act="calallow">Show my calendar</button></div></div>`;
+  if (CAL.state === "connect") return `<div class="card soft cal">${head}<div class="wx-msg">${esc(CAL.msg)}</div></div>`;
+  if (!CAL.today) return `<div class="card soft cal">${head}<div class="wx-msg">${CAL.state === "error" ? "Your calendar isn't loading right now. It will try again shortly." : "Checking your calendar…"}</div></div>`;
+  const t = todayISO(), now = new Date(), nowMin = now.getHours()*60 + now.getMinutes();
+  const td = calDay(CAL.today, t), left = td.timed.filter(x => x.en > nowMin);
+  const chips = td.allDay.length ? `<div class="cal-all">${td.allDay.map(e => `<span class="pill">${esc(e.subject || "All day")}</span>`).join("")}</div>` : "";
+  let body;
+  if (!td.timed.length) body = `<div class="cal-empty">No meetings today.</div>`;
+  else if (!left.length) body = `<div class="cal-empty">That's it for meetings today.</div>`;
+  else { const shown = td.timed.filter(x => x.en > nowMin - 60).slice(0, 5); body = `<div class="cal-list">${calRows(shown, nowMin)}</div>${left.length > shown.filter(x => x.en > nowMin).length ? `<div class="wx-say">+${left.length - shown.filter(x => x.en > nowMin).length} more later</div>` : ""}`; }
+  let tm = "";
+  if (!left.length && CAL.tomorrow) { const tt = calDay(CAL.tomorrow, addDays(t, 1)); if (tt.timed.length) tm = `<p class="eyebrow cal-tm">Tomorrow</p><div class="cal-list">${calRows(tt.timed.slice(0, 3), null)}</div>${tt.timed.length > 3 ? `<div class="wx-say">+${tt.timed.length - 3} more</div>` : ""}`; }
+  const sum = td.timed.length ? `<span class="cal-n">${left.length ? `${left.length} to go` : `${td.timed.length} done`}</span>` : "";
+  return `<div class="card soft cal"><div class="cal-head">${head}${sum}</div>${chips}${body}${tm}${CAL.stale ? `<div class="wx-say">May be out of date</div>` : ""}</div>`;
+}
+function calErr(e){ const code = e && e.code, retract = () => { CAL.today = null; CAL.tomorrow = null; };
+  if (code === "approval_required") { retract(); CAL.state = "approve"; }
+  else if (code === "server_not_connected" || code === "selection_required" || code === "server_not_found") { retract(); CAL.state = "connect"; CAL.msg = code === "selection_required" ? "Choose which Microsoft 365 connection to use when claude.ai asks, then reopen this page." : "Add Microsoft 365 in claude.ai Settings → Connectors to see your meetings here."; }
+  else if (code === "needs_reauth") { retract(); CAL.state = "connect"; CAL.msg = "Reconnect Microsoft 365 in claude.ai Settings → Connectors to see your meetings here."; }
+  else if (["not_in_manifest","blocked_by_policy","not_granted","capability_disabled","capability_removed","bad_request","transform_error","user_changed"].includes(code)) { retract(); CAL.state = "off"; }
+  else { if (CAL.today) { CAL.stale = true; CAL.state = "ok"; } else CAL.state = "error"; }
+}
+const calHandler = key => ev => {
+  if (ev.type === "data") { CAL[key] = calParse(ev.result); CAL.state = "ok"; CAL.stale = false; }
+  else calErr(ev.error);
+  if (U.view === "today") render();
+};
+function calWatch(){ if (!CAL.mcp) return; const t = todayISO(); if (CAL.day === t) return; CAL.day = t;
+  CAL.un.forEach(u => { try { u(); } catch (e) {} }); CAL.today = null; CAL.tomorrow = null;
+  const opts = {refetchInterval: 10*60*1000, cache:{staleTime: 5*60*1000, gcTime: 12*3600*1000}};
+  CAL.un = [CAL.mcp.watchTool(CAL_SERVER, CAL_TOOL, calIn(t, addDays(t,1)), calHandler("today"), opts),
+            CAL.mcp.watchTool(CAL_SERVER, CAL_TOOL, calIn(addDays(t,1), addDays(t,2)), calHandler("tomorrow"), opts)]; }
+function calStart(m){ if (!m) return; CAL.mcp = m; CAL.state = "loading"; calWatch(); if (U.view === "today") render(); }
+setInterval(calWatch, 60000);
+document.addEventListener("click", async e => { if (!e.target.closest('[data-act="calallow"]') || !CAL.mcp) return;
+  CAL.state = "loading"; render(); const t = todayISO();
+  try { const r = await CAL.mcp.callTool(CAL_SERVER, CAL_TOOL, calIn(t, addDays(t,1))); CAL.today = calParse(r); CAL.state = "ok"; CAL.stale = false; CAL.mcp.invalidate(CAL_SERVER).catch(() => {}); }
+  catch (err) { calErr(err); }
+  render(); });
+
+/* ───────────────────────── Daily habits ───────────────────────── */
+const HABIT_ICONS = {
+  workout:'<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>',
+  water:'<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  dog:'<path d="M5 9.5l1.5-4.5L9 8h6l2.5-3L19 9.5v4.5a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5z"/><path d="M10 12.5h.01M14 12.5h.01M11 15.5h2"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>'
+};
+const habitList = () => (S.habits || []).filter(h => !h.archived).sort((a,b) => (a.order||0) - (b.order||0));
+const habitDone = (d, id) => !!((S.habitlog || {})[d] || {})[id];
+function habitStreak(id){ let d = todayISO(), n = 0; if (!habitDone(d, id)) d = addDays(d, -1); while (habitDone(d, id) && n < 400) { n++; d = addDays(d, -1); } return n; }
+function habitsCard(){
+  if (!db) return "";
+  const hs = habitList(), t = todayISO();
+  if (!hs.length) return `<div class="card soft habits"><p class="eyebrow">Daily habits</p><div class="wx-msg">No habits set up yet.</div></div>`;
+  const done = hs.filter(h => habitDone(t, h.id)).length;
+  return `<div class="card soft habits"><div class="cal-head"><p class="eyebrow">Daily habits</p><span class="cal-n">${done === hs.length ? "All done today" : `${done} of ${hs.length}`}</span></div>
+    <div class="hab-row">${hs.map(h => { const on = habitDone(t, h.id), st = habitStreak(h.id);
+      return `<button class="hab ${on ? "on" : ""}" data-act="habit" data-id="${esc(h.id)}" aria-pressed="${on}"><span class="hab-dot"><svg viewBox="0 0 24 24" aria-hidden="true">${HABIT_ICONS[on ? "check" : (h.icon || "check")] || HABIT_ICONS.check}</svg></span><span class="hab-name">${esc(h.name)}</span><span class="hab-st">${st > 1 ? `${st} days in a row` : on ? "Done today" : " "}</span></button>`; }).join("")}</div></div>`;
+}
+document.addEventListener("click", e => { const b = e.target.closest('[data-act="habit"]'); if (!b || !db) return;
+  const t = todayISO(), id = b.dataset.id, cur = {...((S.habitlog || {})[t] || {})}; cur[id] = !cur[id];
+  S.habitlog = {...(S.habitlog || {}), [t]: cur}; render(); w("habitlog", t, cur, "set"); });
 
 /* ───────────────────────── Plans (coming up) ───────────────────────── */
 function planRow(p){ const d = daysTo(p.date), multi = p.endDate && p.endDate !== p.date;
@@ -249,13 +401,15 @@ function vPlan(){
 function vMenu(){
   const html = perEvent(e => { const d = S.dishes.filter(x => x.eventId === e.id); if (!d.length) return `<div class="empty"><b>No menu yet for ${esc(e.name)}</b>Add a dish below.</div>`;
     return COURSES.map(c => { const items = d.filter(x => (x.course||"Other") === c).sort((a,b) => (a.order||0)-(b.order||0)); if (!items.length) return "";
-      return `<h2 class="eyebrow">${c}</h2><div class="card soft"><div class="list">` + items.map(x => { const r = R[x.recipe], o = U.open[x.id];
-        return `<div class="row ${x.ready?"done":""}">${ck(x.ready,"dish",x.id,"Made "+x.name)}<div class="main"><div class="t">${esc(x.name)}</div>
+      const qk = e.id + "|" + c, qOpen = U.addCourse === qk;
+      const qform = qOpen ? `<form class="add qadd" data-form="dishq" data-ev="${e.id}" data-course="${c}"><input type="text" id="nq" placeholder="Add to ${c}" aria-label="New ${c.toLowerCase()} dish" autocomplete="off"><select id="nqr" aria-label="From the cookbook">${recipeOptions("")}</select><button class="btn">Add</button><button class="btn quiet" type="button" data-act="addcourse" data-id="">Done</button></form>` : "";
+      return `<div class="sec-h"><h2 class="eyebrow">${c}</h2><button class="sec-add ${qOpen?"on":""}" data-act="addcourse" data-id="${qk}" aria-label="Add to ${c}" aria-expanded="${qOpen}">+</button></div><div class="card soft">${qform}<div class="list">` + items.map(x => { const r = R[x.recipe], o = U.open[x.id];
+        return `<div class="sw" data-col="dishes" data-id="${x.id}"><div class="row ${x.ready?"done":""}">${ck(x.ready,"dish",x.id,"Made "+x.name)}<div class="main"><div class="t">${esc(x.name)}</div>
           <div>${x.ready?`<span class="pill made">Made</span>`:""}${r?`<button class="pill link" data-act="recipe" data-id="${x.recipe}">Recipe</button>`:""}${x.makeAhead?`<span class="pill fz">${esc(x.makeAhead)}</span>`:""}${x.who?`<span class="pill">${esc(x.who)} bringing</span>`:""}${x.note?`<span class="pill">${esc(x.note)}</span>`:""}</div>
           ${o?`<div class="edit"><input type="text" id="who-${x.id}" value="${esc(x.who||"")}" placeholder="Who's bringing it?" style="flex:1 1 150px"><input type="text" id="ma-${x.id}" value="${esc(x.makeAhead||"")}" placeholder="Make ahead (e.g. Freeze Nov 7)" style="flex:1 1 180px"><button class="btn sm ghost" data-act="savedish" data-id="${x.id}">Save</button>${del("dishes",x.id)}</div>`:""}
-          </div><button class="btn sm quiet" data-act="toggle" data-id="${x.id}">${o?"Close":"Edit"}</button></div>`; }).join("") + `</div></div>`; }).join(""); });
+          </div><button class="btn sm quiet" data-act="toggle" data-id="${x.id}">${o?"Close":"Edit"}</button></div><button class="sw-del" data-act="swdel" data-col="dishes" data-id="${x.id}" tabindex="-1">Delete</button></div>`; }).join("") + `</div></div>`; }).join(""); });
   return html + `<h2 class="eyebrow">Add a dish</h2><form class="add" data-form="dish">${evSelect("nde")}<select id="ndr" aria-label="From the cookbook">${recipeOptions("")}</select><input type="text" id="nd" placeholder="Or type a dish"><select id="ndc" aria-label="Course">${COURSES.map(c => `<option>${c}</option>`).join("")}</select><button class="btn">Add</button></form>
-    <p class="note">Tap the circle once a dish is made. Shop pulls ingredients from every dish linked to a cookbook recipe.</p>`;
+    <p class="note">Tap the circle once a dish is made. Swipe a dish left to delete it, or tap + on a course to add to it. Shop pulls ingredients from every dish linked to a cookbook recipe.</p>`;
 }
 
 function vShop(){
@@ -614,6 +768,7 @@ document.addEventListener("click", async ev => {
     case "saveitem": w("items", id, {time:$("#it-"+id).value.trim(), link:$("#il-"+id).value.trim()}); toast("Saved"); break;
     case "saveroom": w("rooms", id, {guests:$("#rg-"+id).value.trim(), nights:$("#rn-"+id).value.trim()}); toast("Saved"); break;
     case "toggle": U.open[id] = !U.open[id]; break;
+    case "addcourse": U.addCourse = (id && U.addCourse !== id) ? id : null; render(); if (U.addCourse) { const q = $("#nq"); if (q) q.focus(); } return;
     case "savedish": w("dishes", id, {who:$("#who-"+id).value.trim(), makeAhead:$("#ma-"+id).value.trim()}); U.open[id] = false; break;
     case "swdel": w(b.dataset.col, id, null, "delete"); toast("Deleted"); break;
     case "del": { const k = b.dataset.col+id; if (U.armed === k) { U.armed = null; w(b.dataset.col, id, null, "delete"); } else U.armed = k; break; }
@@ -652,24 +807,41 @@ document.addEventListener("submit", async e => {
   if (f === "extra" && v("#ne")) add("extras", {eventId:v("#nee"), item:v("#ne"), done:false});
   if (f === "room" && v("#nr")) add("rooms", {weekend:U.wk, name:v("#nr"), order:Date.now()%1e7, items:{}});
   if (f === "dish") { const r = v("#ndr"), n = v("#nd") || (R[r] && R[r].title); if (n) add("dishes", {eventId:v("#nde"), name:n, recipe:r, course:v("#ndc"), order:Date.now()%1e7, ready:false}); }
+  if (f === "dishq") { const r = v("#nqr"), n = v("#nq") || (R[r] && R[r].title); if (n) { await add("dishes", {eventId:e.target.dataset.ev, name:n, recipe: r || recipeFor(n), course:e.target.dataset.course, order:Date.now()%1e7, ready:false}); toast("Added to " + e.target.dataset.course); }
+    e.target.reset(); render(); const q = $("#nq"); if (q) q.focus(); return; }
   e.target.reset(); render();
 });
 
 /* Swipe a list row left to reveal Delete. Vertical scrolling is untouched (touch-action: pan-y). */
+/* Touch uses touch events with a non-passive move, so once a drag reads as sideways the page keeps it
+   (the app around the page can't claim it as a scroll or back gesture). Mouse, trackpad and pencil use pointer events.
+   Direction is decided only after 8px of movement, so a finger's first tiny wobble doesn't cancel the swipe. */
 let SW = null;
 const swReset = except => document.querySelectorAll(".sw.open").forEach(el => { if (el !== except) el.classList.remove("open"); });
-document.addEventListener("pointerdown", e => { const el = e.target.closest(".sw"); if (!el || e.pointerType === "mouse" || e.target.closest("button, input, a")) { if (!el) swReset(); return; }
-  SW = {el, x:e.clientX, y:e.clientY, dx:0, moved:false, open:el.classList.contains("open")}; el.querySelector(".row").style.transition = "none"; }, {passive:true});
-document.addEventListener("pointermove", e => { if (!SW) return; const dx = e.clientX - SW.x, dy = e.clientY - SW.y; if (!SW.moved && Math.abs(dy) > Math.abs(dx)) { SW = null; return; }
-  if (Math.abs(dx) > 6) SW.moved = true; if (!SW.moved) return; SW.dx = Math.max(-120, Math.min(SW.open ? 96 : 0, dx + (SW.open ? -96 : 0))); SW.el.querySelector(".row").style.transform = `translateX(${SW.dx}px)`; }, {passive:true});
-const swEnd = () => { if (!SW) return; const row = SW.el.querySelector(".row"); row.style.transition = ""; row.style.transform = ""; if (SW.moved) { swReset(SW.el); SW.el.classList.toggle("open", SW.dx < -48); SW.el.dataset.justSwiped = "1"; setTimeout(() => delete SW_last.dataset.justSwiped, 300); } const SW_last = SW.el; SW = null; };
-document.addEventListener("pointerup", swEnd, {passive:true}); document.addEventListener("pointercancel", swEnd, {passive:true});
+const swStart = (target, x, y) => { const el = target.closest && target.closest(".sw"); if (!el) { swReset(); return false; }
+  if (target.closest("button, input, select, textarea, a")) return false;
+  SW = {el, x, y, dx:0, moved:false, dir:null, open:el.classList.contains("open")}; return true; };
+const swMove = (x, y) => { if (!SW) return false; const dx = x - SW.x, dy = y - SW.y;
+  if (!SW.dir) { if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return false; SW.dir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+    if (SW.dir === "v") { SW = null; return false; } SW.el.querySelector(".row").style.transition = "none"; }
+  SW.moved = true; SW.dx = Math.max(-130, Math.min(SW.open ? 96 : 0, dx + (SW.open ? -96 : 0)));
+  SW.el.querySelector(".row").style.transform = `translateX(${SW.dx}px)`; return true; };
+const swEnd = () => { if (!SW) return; const el = SW.el, row = el.querySelector(".row"); row.style.transition = ""; row.style.transform = "";
+  if (SW.moved) { swReset(el); el.classList.toggle("open", SW.dx < -40); el.dataset.justSwiped = "1"; setTimeout(() => { delete el.dataset.justSwiped; }, 350); }
+  SW = null; };
+document.addEventListener("touchstart", e => { if (e.touches.length !== 1) { SW = null; return; } const t = e.touches[0]; swStart(e.target, t.clientX, t.clientY); }, {passive:true});
+document.addEventListener("touchmove", e => { if (!SW) return; const t = e.touches[0]; if (swMove(t.clientX, t.clientY) && e.cancelable) e.preventDefault(); }, {passive:false});
+document.addEventListener("touchend", swEnd, {passive:true}); document.addEventListener("touchcancel", swEnd, {passive:true});
+document.addEventListener("pointerdown", e => { if (e.pointerType === "touch") return; if (e.pointerType === "mouse" && e.button !== 0) return; swStart(e.target, e.clientX, e.clientY); });
+document.addEventListener("pointermove", e => { if (e.pointerType === "touch" || !SW) return; if (swMove(e.clientX, e.clientY)) e.preventDefault(); });
+document.addEventListener("pointerup", e => { if (e.pointerType !== "touch") swEnd(); }); document.addEventListener("pointercancel", e => { if (e.pointerType !== "touch") swEnd(); });
 document.addEventListener("click", e => { const el = e.target.closest(".sw"); if (el && el.dataset.justSwiped) { e.stopPropagation(); e.preventDefault(); } }, true);
 
 renderCapture(); render();
 (async () => {
   const use = n => (window.claude && typeof claude.use === "function") ? claude.use(n).catch(() => null) : Promise.resolve(null);
   use("sample").then(s => { sample = s; renderCapture(); });
+  use("mcp").then(m => { wxStart(m); calStart(m); });
   db = await use("db");
   if (!db) { ready = true; noDb = true; render(); return; }
   const cols = ["events","dishes","guests","tasks","extras","rooms","lists","items","plans"];
@@ -677,6 +849,8 @@ renderCapture(); render();
   cols.forEach(c => db.collection(c).onSnapshot(s => { S[c] = s.docs.map(d => ({id:d.id, ...d.data()})); first(); }, () => first()));
   db.collection("checks").onSnapshot(s => { S.checks = {}; s.docs.forEach(d => S.checks[d.id] = d.data()); first(); }, () => first());
   db.collection("dinners").onSnapshot(s => { S.dinners = {}; s.docs.forEach(d => S.dinners[d.id] = d.data()); first(); }, () => first());
+  db.collection("habits").onSnapshot(s => { S.habits = s.docs.map(d => ({id:d.id, ...d.data()})); render(); }, () => {});
+  db.collection("habitlog").onSnapshot(s => { S.habitlog = {}; s.docs.forEach(d => S.habitlog[d.id] = d.data()); render(); }, () => {});
   setTimeout(() => { if (!ready) { ready = true; render(); } }, 8000);
 })();
 setInterval(() => { if (U.view === "today" || (U.view === "hosting" && U.htab === "day")) render(); }, 60000);
