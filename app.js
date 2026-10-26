@@ -15,7 +15,7 @@ const VIEWS = [["today","Today"],["lists","Lists"],["dinners","Dinners"],["hosti
 const RCATS = ["Breakfast","Appetizers","Mains","Sides","Desserts","Drinks","For the pups"];
 const LIST_ALIASES = {grocery:["grocery","groceries","store","supermarket","food shop","shopping"], costco:["costco","bulk","warehouse"], todo:["to-do","todo","to do","tasks","errands","list"], ideas:["ideas","meal ideas","dinner ideas","meals","dinners"]};
 
-const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], checks:{}, dinners:{}};
+const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], checks:{}, dinners:{}, shared:{}};
 const U = {view:"today", wk:null, sub:"all", htab:"plan", catF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All"};
 let db = null, sample = null, ready = false, noDb = false, seen = 0;
 const ls = {get:(k) => { try { return localStorage.getItem(k); } catch(e) { return null; } }, set:(k,v) => { try { localStorage.setItem(k,v); } catch(e) {} }};
@@ -168,12 +168,14 @@ const wxKind = c => { c = +c; if ([15,16,17,41,42].includes(c)) return "storm"; 
   if (c===33 || c===34) return "moon"; if (c>=35 && c<=38) return "partly"; if (c>=6 && c<=11) return "cloud"; if (c>=3 && c<=5) return "partly"; return "sun"; };
 const wxSvg = c => `<svg viewBox="0 0 24 24" aria-hidden="true">${WXI[wxKind(c)]}</svg>`;
 function wxCard(){
-  if (WX.state === "off") return "";
+  if (WX.state === "off" && !S.shared.weather) return "";
   const head = `<p class="eyebrow">Philadelphia</p>`;
-  if (WX.state === "approve") return `<div class="wx card soft">${head}<div class="wx-msg">The weather needs your OK once.</div><div><button class="btn sm" data-act="wxallow">Show the weather</button></div></div>`;
-  if (WX.state === "connect") return ""; /* a household member without the AccuWeather connector simply doesn't see the card */
-  const c = WX.cur && WX.cur.currentConditions, d = (WX.daily && WX.daily.dailyForecast) || [];
-  if (!c && !d.length) return `<div class="wx card soft">${head}<div class="wx-msg">${WX.state === "error" ? "The weather isn't loading right now. It will try again shortly." : "Checking the weather…"}</div></div>`;
+  if (WX.state === "approve" && !S.shared.weather) return `<div class="wx card soft">${head}<div class="wx-msg">The weather needs your OK once.</div><div><button class="btn sm" data-act="wxallow">Show the weather</button></div></div>`;
+  const snap = S.shared.weather, live = !!(WX.cur || WX.daily);
+  if (!live && WX.state === "connect" && !snap) return "";
+  if (!live && !snap) return `<div class="wx card soft">${head}<div class="wx-msg">${WX.state === "error" ? "The weather isn't loading right now. It will try again shortly." : "Checking the weather…"}</div></div>`;
+  const src = live ? WX : snap, c = src.cur && src.cur.currentConditions, d = (src.daily && src.daily.dailyForecast) || [];
+  if (!live) WX.stale = true, WX.at = snap.updatedAt;
   const t0 = d[0], isDay = c ? c.isDayTime !== false : true;
   const temp = c ? c.temperatureValue : t0.day.temperature, code = c ? c.iconCode : t0.day.icon, cond = c ? c.phrase : t0.day.phrase;
   const rain = t0 ? Math.max(t0.day.rainProbabilityValue || 0, t0.night.rainProbabilityValue || 0) : 0;
@@ -238,22 +240,23 @@ function calRows(timed, nowMin){
     return href ? `<a class="cal-row ${past ? "past" : ""} ${now ? "now" : ""}" href="${esc(href)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="cal-row ${past ? "past" : ""} ${now ? "now" : ""}">${inner}</div>`; }).join("");
 }
 function calCard(){
-  if (CAL.state === "off") return "";
   const head = `<p class="eyebrow">Today's calendar</p>`;
-  if (CAL.state === "approve") return `<div class="card soft cal">${head}<div class="wx-msg">Your Outlook calendar needs your OK once.</div><div><button class="btn sm" data-act="calallow">Show my calendar</button></div></div>`;
-  if (CAL.state === "connect") return ""; /* a household member without the Microsoft 365 connector simply doesn't see the card */
-  if (!CAL.today) return `<div class="card soft cal">${head}<div class="wx-msg">${CAL.state === "error" ? "Your calendar isn't loading right now. It will try again shortly." : "Checking your calendar…"}</div></div>`;
-  const t = todayISO(), now = new Date(), nowMin = now.getHours()*60 + now.getMinutes();
-  const td = calDay(CAL.today, t), left = td.timed.filter(x => x.en > nowMin);
+  const t = todayISO(), snap = S.shared.calendar, snapToday = snap && snap.days && snap.days[t] ? snap.days[t] : null, snapTom = snap && snap.days && snap.days[addDays(t,1)] ? snap.days[addDays(t,1)] : null;
+  if (CAL.state === "approve" && !snapToday) return `<div class="card soft cal">${head}<div class="wx-msg">Your Outlook calendar needs your OK once.</div><div><button class="btn sm" data-act="calallow">Show my calendar</button></div></div>`;
+  if ((CAL.state === "connect" || CAL.state === "off") && !snapToday) return "";
+  if (!CAL.today && !snapToday) return `<div class="card soft cal">${head}<div class="wx-msg">${CAL.state === "error" ? "Your calendar isn't loading right now. It will try again shortly." : "Checking your calendar…"}</div></div>`;
+  const live = !!CAL.today, todayList = live ? CAL.today : snapToday, tomList = live ? CAL.tomorrow : snapTom;
+  const now = new Date(), nowMin = now.getHours()*60 + now.getMinutes();
+  const td = calDay(todayList, t), left = td.timed.filter(x => x.en > nowMin);
   const chips = td.allDay.length ? `<div class="cal-all">${td.allDay.map(e => `<span class="pill">${esc(e.subject || "All day")}</span>`).join("")}</div>` : "";
   let body;
   if (!td.timed.length) body = `<div class="cal-empty">No meetings today.</div>`;
   else if (!left.length) body = `<div class="cal-empty">That's it for meetings today.</div>`;
   else { const shown = td.timed.filter(x => x.en > nowMin - 60).slice(0, 5); body = `<div class="cal-list">${calRows(shown, nowMin)}</div>${left.length > shown.filter(x => x.en > nowMin).length ? `<div class="wx-say">+${left.length - shown.filter(x => x.en > nowMin).length} more later</div>` : ""}`; }
   let tm = "";
-  if (!left.length && CAL.tomorrow) { const tt = calDay(CAL.tomorrow, addDays(t, 1)); if (tt.timed.length) tm = `<p class="eyebrow cal-tm">Tomorrow</p><div class="cal-list">${calRows(tt.timed.slice(0, 3), null)}</div>${tt.timed.length > 3 ? `<div class="wx-say">+${tt.timed.length - 3} more</div>` : ""}`; }
+  if (!left.length && tomList) { const tt = calDay(tomList, addDays(t, 1)); if (tt.timed.length) tm = `<p class="eyebrow cal-tm">Tomorrow</p><div class="cal-list">${calRows(tt.timed.slice(0, 3), null)}</div>${tt.timed.length > 3 ? `<div class="wx-say">+${tt.timed.length - 3} more</div>` : ""}`; }
   const sum = td.timed.length ? `<span class="cal-n">${left.length ? `${left.length} to go` : `${td.timed.length} done`}</span>` : "";
-  return `<div class="card soft cal"><div class="cal-head">${head}${sum}</div>${chips}${body}${tm}${CAL.stale ? `<div class="wx-say">May be out of date</div>` : ""}</div>`;
+  return `<div class="card soft cal"><div class="cal-head">${head}${sum}</div>${chips}${body}${tm}${!live && snap && snap.updatedLabel ? `<div class="wx-say">Updated ${esc(snap.updatedLabel)}</div>` : CAL.stale ? `<div class="wx-say">May be out of date</div>` : ""}</div>`;
 }
 function calErr(e){ const code = e && e.code, retract = () => { CAL.today = null; CAL.tomorrow = null; };
   if (code === "approval_required") { retract(); CAL.state = "approve"; }
@@ -849,6 +852,7 @@ renderCapture(); render();
   cols.forEach(c => db.collection(c).onSnapshot(s => { S[c] = s.docs.map(d => ({id:d.id, ...d.data()})); first(); }, () => first()));
   db.collection("checks").onSnapshot(s => { S.checks = {}; s.docs.forEach(d => S.checks[d.id] = d.data()); first(); }, () => first());
   db.collection("dinners").onSnapshot(s => { S.dinners = {}; s.docs.forEach(d => S.dinners[d.id] = d.data()); first(); }, () => first());
+  db.collection("shared").onSnapshot(s => { S.shared = {}; s.docs.forEach(d => S.shared[d.id] = d.data()); if (U.view === "today") render(); }, () => {});
   db.collection("habits").onSnapshot(s => { S.habits = s.docs.map(d => ({id:d.id, ...d.data()})); render(); }, () => {});
   db.collection("habitlog").onSnapshot(s => { S.habitlog = {}; s.docs.forEach(d => S.habitlog[d.id] = d.data()); render(); }, () => {});
   setTimeout(() => { if (!ready) { ready = true; render(); } }, 8000);

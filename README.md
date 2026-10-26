@@ -27,6 +27,8 @@ Live app: https://claude.ai/artifact/Qu5T4kmZDYyRck4Vz3HN3S (a claude.ai artifac
 | `extras` | `{eventId, item, detail, done}` | Supplies to buy |
 | `rooms` | `{weekend, name, guests, nights, order, items}` | Guest rooms |
 | `checks` | id is the event id; `{<dishId_ingredientHash>: true}` | Shop checkmarks |
+| `shared` | `weather` and `calendar` | Hourly snapshots written by a scheduled task from Hailey's connectors (AccuWeather, Microsoft 365), so every household member sees the same weather and calendar. The page prefers live connector data when the viewer has it and falls back to these |
+| `habits`, `habitlog` | habits: `{name, icon, order, archived}`; habitlog: id is the date, `{<habitId>: true}` | Daily habits row on Today |
 
 Capabilities declared at publish: `db`, `user`, `sample`.
 
