@@ -263,6 +263,10 @@ details.checked summary::-webkit-details-marker{display:none}
 .dinner-edit{margin-top:14px}
 .dinner-edit h3{margin:0 0 8px;font-family:var(--display);font-weight:500;font-size:26px}
 .ideas-panel{margin-top:22px}
+.tagchips{margin:0 0 10px}
+.pill.tag-crockpot,.pill.tag-instantpot,.pill.tag-sheetpan,.pill.tag-onepot,.pill.tag-airfryer,.pill.tag-grill{background:var(--clay-soft);color:var(--clay)}
+.pill.tag-quick{background:var(--green-soft);color:var(--green)}
+.pill.tag-chicken,.pill.tag-beef,.pill.tag-pork,.pill.tag-seafood{background:var(--blue-soft);color:var(--blue)}
 .ideas-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.ideas-head .eyebrow{margin:0}
 .ideas{display:flex;flex-wrap:wrap;gap:8px}
 .idea{border:1px solid var(--line);background:var(--raised);border-radius:var(--pill);padding:9px 16px;font:400 15px var(--sans);cursor:pointer;min-height:42px}

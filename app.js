@@ -16,7 +16,7 @@ const RCATS = ["Breakfast","Appetizers","Mains","Sides","Desserts","Drinks","For
 const LIST_ALIASES = {grocery:["grocery","groceries","store","supermarket","food shop","shopping"], costco:["costco","bulk","warehouse"], todo:["to-do","todo","to do","tasks","errands","list"], ideas:["ideas","meal ideas","dinner ideas","meals","dinners"]};
 
 const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], checks:{}, dinners:{}, shared:{}};
-const U = {view:"today", wk:null, sub:"all", htab:"plan", catF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All"};
+const U = {view:"today", wk:null, sub:"all", htab:"plan", catF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All", ideaTags:[]};
 let db = null, sample = null, ready = false, noDb = false, seen = 0;
 const ls = {get:(k) => { try { return localStorage.getItem(k); } catch(e) { return null; } }, set:(k,v) => { try { localStorage.setItem(k,v); } catch(e) {} }};
 U.view = ["today","lists","dinners","hosting","cookbook","plans"].includes(ls.get("hph_view")) ? ls.get("hph_view") : "today";
@@ -106,6 +106,30 @@ function recipeObj(o, src){ if (!o) return null;
   return null; }
 const recipeFromRef = ref => { const [kind, ...rest] = String(ref||"").split(":"); const id = rest.join(":");
   if (kind === "dinner") return recipeObj(S.dinners[id], ref); if (kind === "item") return recipeObj(S.items.find(i => i.id === id), ref); return R[kind] ? {...R[kind], key:kind, src:"cb:"+kind} : (R[id] ? {...R[id], key:id, src:"cb:"+id} : null); };
+/* Meal idea tags: derived from the recipe's own words and time, plus any tags typed on the idea. */
+const TAGS = [["quick","Under 30 min"],["hour","Under an hour"],["crockpot","Crockpot"],["instantpot","Instant Pot"],["sheetpan","Sheet pan"],["onepot","One pot"],["airfryer","Air fryer"],["grill","Grill"],["chicken","Chicken"],["beef","Beef"],["pork","Pork"],["seafood","Seafood"],["veg","Vegetarian"],["soup","Soup"],["pasta","Pasta"],["tacos","Tacos"],["salad","Salad"],["family","Family cookbook"]];
+const TAG_LABEL = Object.fromEntries(TAGS);
+const minutesOf = t => { let total = 0, any = false; const re = /(\d+(?:\.\d+)?)(?:\s*(?:[–-]|to)\s*(\d+(?:\.\d+)?))?\s*(h(?:ou)?rs?|min(?:ute)?s?)/gi; let m;
+  while ((m = re.exec(String(t||"")))) { any = true; const n = +(m[2] || m[1]); total += /^h/i.test(m[3]) ? n*60 : n; } return any ? total : null; };
+const MEAT = /\b(chicken|beef|steak|pork|bacon|sausage|ham|turkey|lamb|shrimp|salmon|fish|crab|tuna|cod|pollock|scallop|lobster|clam|mussel|trout|chorizo|prosciutto|pepperoni|meatball|ground (?:beef|turkey|pork)|brisket|ribs?|duck|venison|rabbit|anchov)/i;
+function ideaTags(i){
+  const rk = i.recipe && R[i.recipe] ? i.recipe : "", r = rk ? R[rk] : null;
+  const text = [i.text, i.note, ...(i.ingredients || r && r.ingredients || []), ...(i.steps || r && r.steps || [])].join(" \n ");
+  const tags = new Set((i.tags || []).map(x => norm(x).replace(/ /g,"")));
+  const mins = minutesOf(i.time || (rk && recipeTime(rk)) || "");
+  if (mins != null && mins <= 30) tags.add("quick"); if (mins != null && mins <= 60) tags.add("hour");
+  if (/crock[ -]?pot|slow[ -]cook/i.test(text)) tags.add("crockpot"); if (/instant[ -]?pot|pressure cook/i.test(text)) tags.add("instantpot");
+  if (/sheet[ -]?pan/i.test(text)) tags.add("sheetpan"); if (/\bone[ -](?:pot|pan|skillet)|skillet dinner/i.test(text)) tags.add("onepot"); if (/air[ -]?fry/i.test(text)) tags.add("airfryer"); if (/\bgrill/i.test(text)) tags.add("grill");
+  if (/\bchicken\b/i.test(text)) tags.add("chicken"); if (/\b(beef|steak|brisket|meatball|ground beef|pot roast|chuck)\b/i.test(text)) tags.add("beef"); if (/\b(pork|bacon|sausage|ham|chorizo|prosciutto|ribs?)\b/i.test(text)) tags.add("pork");
+  if (/\b(shrimp|salmon|fish|crab|tuna|cod|pollock|scallop|lobster|clam|mussel|trout|seafood)\b/i.test(text)) tags.add("seafood"); if (!MEAT.test(text) && text.trim().length > 12) tags.add("veg");
+  if (/\b(soup|chili|stew|chowder)\b/i.test(text)) tags.add("soup"); if (/\b(pasta|spaghetti|penne|tortellini|lasagna|orzo|mac and cheese|noodle|gnocchi|rigatoni|fettuccine|linguine)\b/i.test(text)) tags.add("pasta");
+  if (/\btacos?\b|\bburrito|\bquesadilla|\benchilada/i.test(text)) tags.add("tacos"); if (/\bsalad\b/i.test(text)) tags.add("salad"); if (rk) tags.add("family");
+  return [...tags].filter(t => TAG_LABEL[t]);
+}
+const ideaMatches = i => !U.ideaTags.length || U.ideaTags.every(t => ideaTags(i).includes(t));
+const tagChips = ideas => { const counts = {}; ideas.forEach(i => ideaTags(i).forEach(t => counts[t] = (counts[t]||0) + 1)); const avail = TAGS.filter(([k]) => counts[k]); if (!avail.length) return "";
+  return `<div class="chips tagchips"><button class="chip" aria-pressed="${!U.ideaTags.length}" data-act="itag" data-id="">All <span>${ideas.length}</span></button>${avail.map(([k,l]) => `<button class="chip" aria-pressed="${U.ideaTags.includes(k)}" data-act="itag" data-id="${k}">${l} <span>${counts[k]}</span></button>`).join("")}</div>`; };
+const tagPills = i => ideaTags(i).filter(t => !["hour","veg","family"].includes(t)).slice(0,3).map(t => `<span class="pill tag-${t}">${TAG_LABEL[t]}</span>`).join("");
 const recipeOptions = sel => `<option value="">From the cookbook (optional)</option>` + Object.entries(R).sort((a,b) => a[1].title.localeCompare(b[1].title)).map(([k,v]) => `<option value="${k}" ${sel===k?"selected":""}>${esc(v.title)}</option>`).join("");
 
 /* ───────────────────────── Render shell ───────────────────────── */
@@ -329,17 +353,19 @@ function vLists(){
   const index = `<div class="list-index">${lists.map(l => `<button aria-pressed="${l.id===U.listId}" data-act="list" data-id="${l.id}">${esc(l.name)}<span class="n">${openItems(l.id).length || ""}</span></button>`).join("")}
     <form class="newlist" data-form="list"><input type="text" id="nl" placeholder="New list…" aria-label="New list name"></form></div>`;
   if (!U.listId) return `<div class="ph"><h1>Lists</h1></div><div class="lists-layout">${index}<div class="empty"><b>Make your first list</b>Grocery, Costco, to-do, anything. Type a name on the left.</div></div>`;
-  const L = S.lists.find(l => l.id === U.listId), items = listItems(L.id), open = items.filter(i => !i.done), done = items.filter(i => i.done), isIdeas = L.id === "ideas" || /idea/i.test(L.name);
+  const L = S.lists.find(l => l.id === U.listId), items = listItems(L.id), isIdeas = L.id === "ideas" || /idea/i.test(L.name);
+  const allOpen = items.filter(i => !i.done), open = isIdeas ? allOpen.filter(ideaMatches) : allOpen, done = items.filter(i => i.done);
   const week = [0,1,2,3,4,5,6].map(i => addDays(todayISO(), i));
   const row = i => { const rk = i.recipe && R[i.recipe] ? i.recipe : (isIdeas ? recipeFor(i.text) : ""), tm = i.time || (rk && recipeTime(rk));
-    return `<div class="sw" data-col="items" data-id="${i.id}"><div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk || hasContent(i) ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : hasContent(i) ? `<button class="pill link" data-act="recipe" data-id="item:${i.id}">Recipe</button>` : ""}${linkPill(i.link)}</div>` : ""}
-    ${U.editList ? `<div class="edit"><input type="text" id="it-${i.id}" value="${esc(i.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 160px"><input type="text" id="il-${i.id}" value="${esc(i.link||"")}" placeholder="Link (Pinterest, recipe site)" style="flex:1 1 200px"><button class="btn sm ghost" data-act="saveitem" data-id="${i.id}">Save</button></div>` : ""}
+    return `<div class="sw" data-col="items" data-id="${i.id}"><div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk || hasContent(i) || (isIdeas && ideaTags(i).length) ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : hasContent(i) ? `<button class="pill link" data-act="recipe" data-id="item:${i.id}">Recipe</button>` : ""}${linkPill(i.link)}${isIdeas ? tagPills(i) : ""}</div>` : ""}
+    ${U.editList ? `<div class="edit"><input type="text" id="it-${i.id}" value="${esc(i.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 160px"><input type="text" id="il-${i.id}" value="${esc(i.link||"")}" placeholder="Link (Pinterest, recipe site)" style="flex:1 1 200px">${isIdeas ? `<input type="text" id="ig-${i.id}" value="${esc((i.tags||[]).join(", "))}" placeholder="Tags, e.g. crockpot, kid friendly" style="flex:1 1 180px">` : ""}<button class="btn sm ghost" data-act="saveitem" data-id="${i.id}">Save</button></div>` : ""}
     ${isIdeas && !i.done && U.pickIdea === i.id ? `<div class="daypick">${week.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(i.text)}">${d===todayISO()?"Tonight":fmt(d,{weekday:"short"})}</button>`).join("")}<button class="chip" data-act="plan" data-id="">Cancel</button></div>` : ""}</div>
     ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${U.editList ? del("items", i.id) : ""}</div><button class="sw-del" data-act="swdel" data-col="items" data-id="${i.id}" tabindex="-1">Delete</button></div>`; };
   const main = `<div class="lhead"><h2>${esc(L.name)}</h2><div class="tools">${safeUrl(L.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(L.link))}" target="_blank" rel="noopener">${esc(linkLabel(L.link))} board ↗</a>` : ""}${done.length ? `<button class="btn sm ghost" data-act="clearchecked" data-id="${L.id}">Clear ${done.length} checked</button>` : ""}<button class="btn sm ${U.editList?"":"quiet"}" data-act="editlist">${U.editList ? "Done" : "Edit"}</button>${U.editList ? `<button class="btn sm clay" data-act="dellist" data-id="${L.id}">${U.armed==="list"+L.id ? "Really delete?" : "Delete list"}</button>` : ""}</div></div>
     ${U.editList ? `<form class="add" data-form="listlink" data-id="${L.id}" style="margin:0 0 10px"><input type="text" id="ll" value="${esc(L.link||"")}" placeholder="Board or page link for this list (e.g. your Pinterest board)"><button class="btn sm ghost">Save link</button></form>` : ""}
     <form class="quickadd" data-form="item"><input type="text" id="ni" placeholder="${isIdeas ? "A dinner idea…" : "Add to " + esc(L.name) + "…"}" aria-label="Add item" autocomplete="off">${isIdeas ? `<input type="text" id="ni-time" placeholder="Time" aria-label="How long it takes" style="flex:0 1 110px">` : ""}<button class="rbtn primary" aria-label="Add">${svg("plus")}</button></form>
-    <div class="card soft">${open.length ? `<div class="list">${open.map(row).join("")}</div>` : `<div class="empty"><b>${isIdeas ? "No ideas saved" : "All clear"}</b>${isIdeas ? "Jot down dinners you want to make. Plan one into the week with a tap." : "Add something above, or say it out loud."}</div>`}</div>
+    ${isIdeas ? tagChips(allOpen) : ""}
+    <div class="card soft">${open.length ? `<div class="list">${open.map(row).join("")}</div>` : `<div class="empty"><b>${isIdeas ? (allOpen.length ? "Nothing matches those filters" : "No ideas saved") : "All clear"}</b>${isIdeas ? (allOpen.length ? "Tap All to clear them." : "Jot down dinners you want to make. Plan one into the week with a tap.") : "Add something above, or say it out loud."}</div>`}</div>
     ${done.length ? `<details class="checked" ${U.editList?"open":""}><summary>Checked off (${done.length})</summary><div class="card soft"><div class="list">${done.map(row).join("")}</div></div></details>` : ""}`;
   return `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done).length} open across ${lists.length} lists</div></div><div class="lists-layout">${index}<div>${main}</div></div>`;
 }
@@ -356,8 +382,8 @@ function vDinners(){
     edit = `<div class="card dinner-edit"><h3>Dinner on ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h3><form class="add" data-form="dinner" data-date="${d}"><input type="text" id="dn-title" value="${esc(m.title||"")}" placeholder="What's for dinner?" autocomplete="off"><select id="dn-recipe" aria-label="Cookbook recipe">${recipeOptions(m.recipe)}</select><input type="text" id="dn-note" value="${esc(m.note||"")}" placeholder="Note (who's cooking, prep, takeout)"><input type="text" id="dn-time" value="${esc(m.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 150px"><input type="text" id="dn-link" value="${esc(m.link||"")}" placeholder="Link (optional)"><button class="btn">Save</button>${m.title ? `<button class="btn ghost" type="button" data-act="cleardinner" data-id="${d}">Clear</button>` : ""}<button class="btn quiet" type="button" data-act="canceldinner">Close</button></form>
       ${recipeObj(m) ? `<div class="inline">${(recipeObj(m).steps||[]).length ? `<button class="btn sm" data-act="cook" data-id="dinner:${d}">Cook it</button>` : ""}<button class="btn sm ghost" data-act="recipe" data-id="dinner:${d}">Recipe</button>${(recipeObj(m).ingredients||[]).length ? `<button class="btn sm ghost" data-act="togrocery" data-id="dinner:${d}">Add ingredients to Grocery</button>` : ""}${safeUrl(m.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(m.link))}" target="_blank" rel="noopener">Open ${esc(linkLabel(m.link))} ↗</a>` : ""}</div>` : ""}</div>`; }
   const ideasList = S.lists.find(l => l.id === "ideas") || S.lists.find(l => /idea/i.test(l.name));
-  const ideas = ideasList ? openItems(ideasList.id) : [];
-  const ideasHtml = `<div class="ideas-panel"><div class="ideas-head"><p class="eyebrow">Meal ideas</p>${ideasList && safeUrl(ideasList.link) ? `<a class="pill link ext" href="${esc(safeUrl(ideasList.link))}" target="_blank" rel="noopener" style="margin:0">${esc(linkLabel(ideasList.link))} board ↗</a>` : ""}</div>${ideas.length ? `<div class="ideas">${ideas.map(i => { const tm = shortTime(i.time, i.recipe || recipeFor(i.text)); return `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="idearecipe" data-id="${i.id}"><span class="plus" aria-hidden="true">+</span><span class="idea-t">${esc(i.text)}${tm ? `<span>${esc(tm)}</span>` : ""}</span></button>`; }).join("")}</div>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
+  const allIdeas = ideasList ? openItems(ideasList.id) : [], ideas = allIdeas.filter(ideaMatches);
+  const ideasHtml = `<div class="ideas-panel"><div class="ideas-head"><p class="eyebrow">Meal ideas</p>${ideasList && safeUrl(ideasList.link) ? `<a class="pill link ext" href="${esc(safeUrl(ideasList.link))}" target="_blank" rel="noopener" style="margin:0">${esc(linkLabel(ideasList.link))} board ↗</a>` : ""}</div>${tagChips(allIdeas)}${ideas.length ? `<div class="ideas">${ideas.map(i => { const tm = shortTime(i.time, i.recipe || recipeFor(i.text)); return `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="idearecipe" data-id="${i.id}"><span class="plus" aria-hidden="true">+</span><span class="idea-t">${esc(i.text)}${tm || ideaTags(i).length ? `<span>${esc([tm, ...ideaTags(i).filter(t => ["crockpot","instantpot","sheetpan","onepot","airfryer","grill"].includes(t)).map(t => TAG_LABEL[t])].filter(Boolean).join(" · "))}</span>` : ""}</span></button>`; }).join("")}</div>` : allIdeas.length ? `<p class="note">Nothing matches those filters.</p>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
     ${U.pickIdea && ideas.find(i => i.id === U.pickIdea) ? `<p class="note" style="margin-top:14px">Put <b>${esc(ideas.find(i => i.id === U.pickIdea).text)}</b> on which night?</p><div class="daypick">${days.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(ideas.find(i => i.id === U.pickIdea).text)}">${fmt(d,{weekday:"short",day:"numeric"})}</button>`).join("")}</div>` : ""}</div>`;
   return `<div class="ph"><div><h1>Dinners</h1><div class="sub">Plan the week on Sunday, shop once.</div></div></div>${nav}${cards}${edit}${ideasHtml}`;
 }
@@ -632,7 +658,7 @@ COOKBOOK keys=titles: ${cookbook}`;
 const CAPTURE_RULES = `You sort spoken or typed notes for a household app (lists, weekly dinners, holiday hosting). Turn the note into actions. Reply with ONLY a JSON object: {"reply": string, "actions": [ ... ]}. "reply" is one short, warm sentence (under 20 words) saying what you did, written to the person who spoke.
 
 Allowed action shapes:
-{"type":"add_items","list":"Grocery","items":[{"text":"paper towels","note":"","time":""}]}
+{"type":"add_items","list":"Grocery","items":[{"text":"paper towels","note":"","time":"","tags":[]}]}
 {"type":"check_items","list":"Costco","items":["paper towels"]}
 {"type":"uncheck_items","list":"Costco","items":["paper towels"]}
 {"type":"remove_items","list":"Costco","items":["paper towels"]}
@@ -655,7 +681,7 @@ Rules:
 - Lists: Grocery is for food and supermarket items, Costco for bulk or anything said with "Costco", To-do for errands and general tasks, Meal ideas for dinner ideas ("idea: ..."). Use an existing list name exactly as given. Create a new list only when the note clearly names a list that doesn't exist.
 - "Tonight" is today. A weekday name means the next such day from today (today if it is that day); "next Sunday" after a weekday name means the one after this coming one only when the note says "next week". "What's for dinner" style notes are set_dinner. When the dinner matches a cookbook title, put its key in "recipe". A time estimate mentioned ("takes 30 minutes") goes in "time".
 - Things happening on a date that are not to-dos (a trip, an appointment, a night out, a visitor, a game) are add_plan. A to-do is something to get done; a plan is somewhere to be.
-- Dinner ideas without a date ("idea: lemon chicken", "I want to make tacos sometime") are add_items on Meal ideas; a duration that was said ("takes 30 minutes") goes in the item's "time".
+- Dinner ideas without a date ("idea: lemon chicken", "I want to make tacos sometime") are add_items on Meal ideas; a duration that was said ("takes 30 minutes") goes in the item's "time", and descriptors like crockpot, sheet pan, kid friendly, date night go in "tags".
 - cat is one of invites, reservations, rooms, house, food. course is one of Breakfast, Appetizers, Dinner, Sides, Dessert, Drinks, Other. status is yes, no or maybe. For rsvp, leave event empty to update that guest on every event of their weekend.
 - Hosting notes go to the event the note is about. If a holiday is named but not an event, use the main dinner event of that weekend. If a to-do has no date, use a sensible date before the event.
 - Split a note with several things into several actions. Keep item text short, like a list entry. Don't invent items. Don't repeat an action that already exists in the data (for example an item already on the list).
@@ -695,7 +721,7 @@ async function applyActions(actions){
           const old = listItems(L.id).find(i => i.done && norm(i.text) === norm(text));
           if (old) { if (await updated("items", old, {done:false, createdAt: base + n})) { have.add(norm(text)); n++; } continue; }
           const note0 = String((it && it.note) || ""), time0 = String((it && it.time) || "") || (/^\s*(about\s*)?\d+\s*(min|minute|hr|hour)/i.test(note0) ? note0 : "");
-          if (await created("items", {listId:L.id, text, note: time0 === note0 ? "" : note0, time: time0, link:"", recipe: L.id === "ideas" ? recipeFor(text) : "", done:false, createdAt: base + n})) { have.add(norm(text)); n++; } }
+          if (await created("items", {listId:L.id, text, note: time0 === note0 ? "" : note0, time: time0, link:"", recipe: L.id === "ideas" ? recipeFor(text) : "", tags: Array.isArray(it && it.tags) ? it.tags.map(String).slice(0,6) : [], done:false, createdAt: base + n})) { have.add(norm(text)); n++; } }
         done.push(`${n} added to ${L.name}`); }
       else if (a.type === "check_items" || a.type === "uncheck_items" || a.type === "remove_items") { const L = findListByName(a.list); const pool = L ? listItems(L.id) : S.items; let n = 0;
         for (const t of (a.items||[]).slice(0,40)) { const it = fuzzy(pool, t, "text"); if (!it) { skipped.push(`Couldn't find "${t}"${L ? " on " + L.name : ""}`); continue; }
@@ -772,7 +798,8 @@ document.addEventListener("click", async ev => {
     case "chk": { const [eid,k] = id.split("|"); const c = S.checks[eid]; if (c) w("checks", eid, {[k]:!c[k]}); else w("checks", eid, {[k]:true}, "set"); break; }
     case "rsvp": { const x = S.guests.find(t => t.id === id); if (x) w("guests", id, {rsvp:{maybe:"yes",yes:"no",no:"maybe"}[x.rsvp||"maybe"]}); break; }
     case "ritem": { const [rid,item] = id.split("|"); const r = S.rooms.find(x => x.id === rid); if (r) w("rooms", rid, {items:{...(r.items||{}), [item]:!(r.items||{})[item]}}); break; }
-    case "saveitem": w("items", id, {time:$("#it-"+id).value.trim(), link:$("#il-"+id).value.trim()}); toast("Saved"); break;
+    case "saveitem": { const g = $("#ig-"+id); w("items", id, {time:$("#it-"+id).value.trim(), link:$("#il-"+id).value.trim(), ...(g ? {tags: g.value.split(",").map(x => x.trim()).filter(Boolean)} : {})}); toast("Saved"); break; }
+    case "itag": U.ideaTags = id ? (U.ideaTags.includes(id) ? U.ideaTags.filter(t => t !== id) : [...U.ideaTags, id]) : []; break;
     case "saveroom": w("rooms", id, {guests:$("#rg-"+id).value.trim(), nights:$("#rn-"+id).value.trim()}); toast("Saved"); break;
     case "toggle": U.open[id] = !U.open[id]; break;
     case "addcourse": U.addCourse = (id && U.addCourse !== id) ? id : null; render(); if (U.addCourse) { const q = $("#nq"); if (q) q.focus(); } return;
