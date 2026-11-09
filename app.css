@@ -619,3 +619,19 @@ a.ce.meet{cursor:pointer}
 .btn.danger{color:var(--warn);margin-left:auto}
 .edit-panel .chips{justify-content:flex-start;margin:0;padding:0 0 2px}
 .whopick .chip{display:inline-flex;align-items:center;gap:8px}
+
+/* + to add on each day */
+.wcol{position:relative}
+.wadd,.madd,.dadd{border:0;border-radius:var(--pill);display:grid;place-items:center;cursor:pointer;padding:0;background:var(--blue-soft);color:var(--blue)}
+.wadd svg,.madd svg,.dadd svg,.dhead .btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.wadd{position:absolute;top:7px;right:7px;width:30px;height:30px;z-index:1}
+.wcol.today .wadd{background:var(--blue);color:#fff}
+.mtop{display:flex;align-items:center;justify-content:space-between}
+.madd{width:24px;height:24px;opacity:0;transition:opacity .15s}
+.mcell:hover .madd,.mcell.sel .madd,.mcell.today .madd{opacity:1}
+@media (hover:none){.madd{opacity:1;background:none}}
+.day .day-r{display:flex;align-items:center;gap:10px}
+.dadd{width:30px;height:30px;background:var(--green-soft);color:var(--green)}
+.dhead .btn{display:inline-flex;align-items:center;gap:6px}
+.dhead .btn svg{width:14px;height:14px}
+@media (max-width:760px){.wadd{top:auto;bottom:8px;left:22px;right:auto}.whead{padding-bottom:46px}.madd{display:none}}

@@ -137,6 +137,23 @@ function editItem(id){ const x = S.items.find(i => i.id === id); if (!x) return;
       ${whoPick(x.who)}
       <div class="inline eacts"><button class="btn">Save</button><button type="button" class="btn quiet" data-act="close">Cancel</button><button type="button" class="btn quiet danger" data-act="edel">${U.armed === "edel" ? "Really delete?" : "Delete"}</button></div>
     </form></div></div>`; }
+/* Quick add for one day, from the + on a calendar day or a day heading. A to-do can belong to a hosting event or to no event (a household to-do). */
+function addSheet(d, kind, hostDefault){
+  const t = todayISO(), wks = hostWks(), wk = wks.find(x => d <= x.evs[x.evs.length-1].date && daysTo(x.evs[0].date) - daysTo(d) <= 21);
+  const evs = wk ? wk.evs : [], ev = evs.find(e => e.date >= d) || evs[evs.length-1];
+  U.add = {d, kind: kind || (U.add && U.add.d === d ? U.add.kind : "todo"), who: U.add && U.add.d === d ? U.add.who : "", ev: U.add && U.add.d === d && U.add.ev !== undefined ? U.add.ev : (hostDefault && ev ? ev.id : "")};
+  const k = U.add.kind, label = fmt(d,{weekday:"long",month:"long",day:"numeric"});
+  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel edit-panel" role="dialog" aria-modal="true" aria-label="Add to ${label}"><div class="top-actions"><button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>Add to ${fmt(d,{weekday:"long"})}</h3>
+    <p class="note" style="font-size:14px;margin-top:6px">${label}${daysTo(d)===0 ? " · today" : daysTo(d)===1 ? " · tomorrow" : ""}</p>
+    <div class="seg" role="tablist" aria-label="Add a" style="margin-top:14px">${[["todo","To-do"],["plan","Plan"],["dinner","Dinner"]].map(([x,l]) => `<button type="button" aria-pressed="${k===x}" data-act="addkind" data-id="${x}">${l}</button>`).join("")}</div>
+    <form class="eform" data-form="dayadd" data-date="${d}">
+      <label>${k === "dinner" ? "What's for dinner?" : k === "plan" ? "What's happening?" : "What needs doing?"}<input type="text" id="da-text" required autocomplete="off" placeholder="${k === "dinner" ? "e.g. Tacos" : k === "plan" ? "e.g. Haircut" : "e.g. Pick up the tablecloths"}" ${k === "dinner" && S.dinners[d] && S.dinners[d].title ? `value="${esc(S.dinners[d].title)}"` : ""}></label>
+      ${k !== "dinner" ? `<div class="erow"><label>Time<input type="text" id="da-time" placeholder="Optional, e.g. 3:00 PM"></label>${k === "todo" ? `<label>For<select id="da-ev"><option value="">The house (no event)</option>${(wk ? wk.evs : []).map(e => `<option value="${e.id}" ${U.add.ev===e.id?"selected":""}>${esc(e.short || e.name)}</option>`).join("")}</select></label><label>Kind<select id="da-cat">${CATS.map(([c,l]) => `<option value="${c}" ${c==="house"?"selected":""}>${l}</option>`).join("")}</select></label>` : ""}</div>` : ""}
+      ${k === "todo" ? whoPick(U.add.who) : ""}
+      <div class="inline eacts"><button class="btn">Add</button><button type="button" class="btn quiet" data-act="close">Cancel</button></div>
+    </form></div></div>`;
+  const f = $("#da-text"); if (f) f.focus();
+}
 function renderPeople(){
   if (!U.peopleOpen) return; const ps = people(), used = ps.map(p => p.color);
   $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel people-panel" role="dialog" aria-modal="true" aria-label="The household"><div class="top-actions"><button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>The household</h3>
@@ -232,7 +249,7 @@ function vToday(){
   return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div>${wxCard()}</div>
     <div class="widgets">${calCard()}</div>
     <div class="today-grid"><div class="card dinner-hero">${hero}${strip}</div>${host}</div>
-    ${due.length ? `<h2 class="eyebrow">Hosting to-dos this week</h2>${dueHtml}` : ""}
+    ${due.length ? `<h2 class="eyebrow">To-dos this week</h2>${dueHtml}` : ""}
     <h2 class="eyebrow">Lists</h2>${lcards}
     <h2 class="eyebrow">Coming up</h2>${coming}`;
 }
@@ -448,7 +465,7 @@ function vHostList(k){
   open.forEach(x => { const key = x.date && x.date < t ? "overdue" : (x.date || "");
     if (key !== cur) { if (cur !== null) groups += `</div></div>`; cur = key;
       groups += key === "overdue" ? `<div class="day past">Overdue<small class="now">Catch up</small></div><div class="card soft"><div class="list">`
-        : `<div class="day">${key ? fmt(key,{weekday:"long",month:"short",day:"numeric"}) : "No date"}<small class="${daysTo(key)===0?"now":daysTo(key)<=7?"soon":""}">${key ? dayTag(key) : ""}</small></div><div class="card soft"><div class="list">`; }
+        : `<div class="day">${key ? fmt(key,{weekday:"long",month:"short",day:"numeric"}) : "No date"}<span class="day-r"><small class="${daysTo(key)===0?"now":daysTo(key)<=7?"soon":""}">${key ? dayTag(key) : ""}</small>${key ? `<button class="dadd" data-act="caladd" data-ev="auto" data-id="${key}" aria-label="Add a to-do on ${fmt(key,{weekday:"long",month:"long",day:"numeric"})}">${svg("plus")}</button>` : ""}</span></div><div class="card soft"><div class="list">`; }
     groups += row(x); });
   if (cur !== null) groups += `</div></div>`;
   const chips = `<div class="chips" style="margin-top:4px">${[["all","All"], ...CATS].filter(([c]) => c === "all" || c === f || left(c)).map(([c,l]) => `<button class="chip" aria-pressed="${f===c}" data-act="hlf" data-id="${c}">${l} <span>${left(c)}</span></button>`).join("")}</div>`;
@@ -524,15 +541,15 @@ function vCal(){
     const weeks = Math.ceil((daysTo(mEnd) - daysTo(gStart) + 1) / 7);
     range = fmt(first, {month:"long", year:"numeric"});
     const cells = []; for (let i = 0; i < weeks*7; i++) { const d = addDays(gStart, i), items = dayItems(d, true), out = d.slice(0,7) !== first.slice(0,7);
-      cells.push(`<div class="mcell ${d===t?"today":""} ${out?"out":""} ${U.calSel===d?"sel":""}" data-act="calday" data-id="${d}" role="button" tabindex="0"><div class="mnum">${pd(d).getDate()}</div><div class="mitems">${items.slice(0,3).join("")}${items.length > 3 ? `<div class="more">+${items.length - 3} more</div>` : ""}</div></div>`); }
+      cells.push(`<div class="mcell ${d===t?"today":""} ${out?"out":""} ${U.calSel===d?"sel":""}" data-act="calday" data-id="${d}" role="button" tabindex="0"><div class="mtop"><div class="mnum">${pd(d).getDate()}</div><button class="madd" data-act="caladd" data-id="${d}" aria-label="Add to ${fmt(d,{month:"long",day:"numeric"})}">${svg("plus")}</button></div><div class="mitems">${items.slice(0,3).join("")}${items.length > 3 ? `<div class="more">+${items.length - 3} more</div>` : ""}</div></div>`); }
     grid = `<div class="month"><div class="mhead">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x => `<div>${x}</div>`).join("")}</div><div class="mgrid">${cells.join("")}</div></div>`;
   } else {
     const start = addDays(weekStart(t), U.calOff*7), days = [0,1,2,3,4,5,6].map(i => addDays(start, i));
     calWeekWatch(start);
     range = `${fmt(start,{month:"long",day:"numeric"})} – ${fmt(days[6],{month: pd(start).getMonth()===pd(days[6]).getMonth() ? undefined : "long", day:"numeric"})}`;
     grid = `<div class="wgrid">${days.map(d => { const items = dayItems(d, false), w = wxOn(d), n = daysTo(d);
-      return `<div class="wcol ${d===t?"today":""} ${n<0?"past":""} ${U.calSel===d?"sel":""}"><button class="whead" data-act="calday" data-id="${d}" aria-label="${fmt(d,{weekday:"long",month:"long",day:"numeric"})}"><span class="wd">${fmt(d,{weekday:"short"})}</span><span class="wn">${pd(d).getDate()}</span>${w ? `<span class="ww">${wxSvg(w.day.icon)}${w.day.temperature}°<i>${w.night.temperature}°</i></span>` : ""}</button>
-        <div class="witems">${items.join("") || `<button class="wempty" data-act="calday" data-id="${d}">Free</button>`}</div></div>`; }).join("")}</div>`;
+      return `<div class="wcol ${d===t?"today":""} ${n<0?"past":""} ${U.calSel===d?"sel":""}"><button class="wadd" data-act="caladd" data-id="${d}" aria-label="Add to ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}">${svg("plus")}</button><button class="whead" data-act="calday" data-id="${d}" aria-label="${fmt(d,{weekday:"long",month:"long",day:"numeric"})}"><span class="wd">${fmt(d,{weekday:"short"})}</span><span class="wn">${pd(d).getDate()}</span>${w ? `<span class="ww">${wxSvg(w.day.icon)}${w.day.temperature}°<i>${w.night.temperature}°</i></span>` : ""}</button>
+        <div class="witems">${items.join("") || `<button class="wempty" data-act="caladd" data-id="${d}">Free</button>`}</div></div>`; }).join("")}</div>`;
   }
   const head = `<div class="ph"><div><h1>Calendar</h1><div class="sub">Meetings, dinners, plans and hosting in one place</div></div>${modes}</div>
     <div class="weeknav cal-nav"><span class="range">${range}</span><button class="rbtn" data-act="caloff" data-id="-1" aria-label="Previous">${svg("prev")}</button>${U.calOff ? `<button class="btn sm ghost" data-act="caloff" data-id="0">Today</button>` : ""}<button class="rbtn" data-act="caloff" data-id="1" aria-label="Next">${svg("next")}</button></div>${legend}${whoChips()}`;
@@ -552,7 +569,7 @@ function calDayPanel(d){
   ].filter(Boolean).join("");
   const kinds = [["plan","Plan"],["dinner","Dinner"], ...(hostWk ? [["task","Hosting to-do"]] : [])];
   const kind = kinds.some(k => k[0] === U.calKind) ? U.calKind : "plan";
-  return `<div class="card dpanel" id="dpanel"><div class="dhead"><div><p class="eyebrow">${d === t ? "Today" : dayTag(d) === "Overdue" ? "Past" : dayTag(d)}</p><h2>${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h2></div>${w ? `<div class="dwx">${wxSvg(w.day.icon)}<span><b>${w.day.temperature}°</b> / ${w.night.temperature}°<br>${esc(w.day.phrase || "")}</span></div>` : ""}</div>
+  return `<div class="card dpanel" id="dpanel"><div class="dhead"><div><p class="eyebrow">${d === t ? "Today" : dayTag(d) === "Overdue" ? "Past" : dayTag(d)}</p><h2>${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h2></div><button class="btn sm" data-act="caladd" data-id="${d}">${svg("plus")} Add</button>${w ? `<div class="dwx">${wxSvg(w.day.icon)}<span><b>${w.day.temperature}°</b> / ${w.night.temperature}°<br>${esc(w.day.phrase || "")}</span></div>` : ""}</div>
     <div class="dgrid">${parts}</div>
     <form class="add cal-add" data-form="calnew" data-date="${d}" data-wk="${esc(hostWk || "")}"><div class="seg sm" role="tablist" aria-label="Add a">${kinds.map(([k,l]) => `<button type="button" aria-pressed="${kind===k}" data-act="calkind" data-id="${k}">${l}</button>`).join("")}</div><input type="text" id="cnt" placeholder="${kind === "dinner" ? "What's for dinner?" : kind === "task" ? "A hosting to-do for this day" : "A plan for this day"}" aria-label="Add to this day" autocomplete="off"><input type="text" id="cntt" placeholder="Time (optional)" style="flex:0 1 140px" ${kind === "dinner" ? "hidden" : ""}><button class="btn">Add</button></form></div>`;
 }
@@ -958,9 +975,11 @@ document.addEventListener("click", async ev => {
     case "whof": U.who = id; ls.set("hph_who", id); break;
     case "people": U.peopleOpen = true; renderPeople(); { const i = $("#npn2"); if (i && !people().length) i.focus(); } return;
     case "pcolor": w("people", id, {color: b.dataset.c}); return;
-    case "edittask": U.armed = null; editTask(id); return;
+    case "edittask": U.armed = null; U.add = null; editTask(id); return;
+    case "caladd": U.edit = null; U.add = null; addSheet(id, b.dataset.kind, b.dataset.ev === "auto"); return;
+    case "addkind": if (U.add) { const sel = $("#da-ev"); if (sel) U.add.ev = sel.value; addSheet(U.add.d, id); } return;
     case "edititem": U.armed = null; editItem(id); return;
-    case "epick": if (U.edit) { U.edit.who = id; b.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === b))); } return;
+    case "epick": if (U.add && !U.edit) { U.add.who = id; b.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === b))); return; } if (U.edit) { U.edit.who = id; b.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === b))); } return;
     case "movetask": if (U.edit) { await w("tasks", U.edit.id, {date:id}); U.edit = null; $("#overlay").innerHTML = ""; toast(`Moved to ${daysTo(id)===0 ? "today" : daysTo(id)===1 ? "tomorrow" : fmt(id,{weekday:"long",month:"short",day:"numeric"})}`); } break;
     case "edel": if (!U.edit) return; if (U.armed === "edel") { U.armed = null; await w(U.edit.col, U.edit.id, null, "delete"); U.edit = null; $("#overlay").innerHTML = ""; toast("Deleted"); break; } U.armed = "edel"; b.textContent = "Really delete?"; return;
     case "golist": U.view = "lists"; U.listId = id; ls.set("hph_view","lists"); ls.set("hph_list", id); break;
@@ -1016,7 +1035,7 @@ document.addEventListener("click", async ev => {
     case "mic": if (rec) stopMic(); else startMic(); return;
     case "undo": undoLast(); return;
     case "dismiss": $("#capout").innerHTML = ""; return;
-    case "close": case "closebg": U.peopleOpen = false; U.edit = null; $("#overlay").innerHTML = ""; return;
+    case "close": case "closebg": U.peopleOpen = false; U.edit = null; U.add = null; $("#overlay").innerHTML = ""; return;
     default: return;
   }
   render();
@@ -1033,6 +1052,11 @@ document.addEventListener("submit", async e => {
   if (f === "list" && v("#nl")) { const name = v("#nl"); const id = await add("lists", {name, order:S.lists.length, createdAt:Date.now()}); if (id) { U.listId = id; ls.set("hph_list", id); } }
   if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe: recipe || recipeFor(title), note:v("#dn-note"), time:v("#dn-time"), link:v("#dn-link")}, "set"); U.editDinner = null; toast("Saved"); }
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
+  if (f === "dayadd" && v("#da-text") && U.add) { const d = e.target.dataset.date, text = v("#da-text"), tm = v("#da-time"), k = U.add.kind;
+    if (k === "dinner") { const cur = S.dinners[d] || {}; await w("dinners", d, {...cur, title:text, recipe:recipeFor(text), note:cur.note || "", time:cur.time || "", link:cur.link || ""}, "set"); }
+    else if (k === "plan") await add("plans", {title:text, date:d, endDate:"", time:tm, note:"", createdAt:Date.now()});
+    else await add("tasks", {eventId:v("#da-ev"), title:text, date:d, time:tm, t:to24(tm), cat:v("#da-cat") || "house", detail:"", recipe:recipeFor(text), who:U.add.who || "", done:false});
+    toast(`Added to ${daysTo(d)===0 ? "today" : daysTo(d)===1 ? "tomorrow" : fmt(d,{weekday:"long"})}`); U.add = null; $("#overlay").innerHTML = ""; render(); return; }
   if (f === "taskedit" && v("#et-title")) { const tm = v("#et-time"), d = {title:v("#et-title"), detail:v("#et-detail"), date:v("#et-date"), time:tm, t:to24(tm), cat:v("#et-cat"), who:(U.edit && U.edit.who) || ""}; if ($("#et-ev")) d.eventId = v("#et-ev");
     await w("tasks", e.target.dataset.id, d); U.edit = null; $("#overlay").innerHTML = ""; toast("Saved"); render(); return; }
   if (f === "itemedit" && v("#ei-text")) { const L = v("#ei-list"), x = S.items.find(i => i.id === e.target.dataset.id), moved = x && x.listId !== L;

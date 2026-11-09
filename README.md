@@ -21,7 +21,7 @@ Live app: https://claude.ai/artifact/Qu5T4kmZDYyRck4Vz3HN3S (a claude.ai artifac
 | `plans` | `{title, date, endDate, time, note, createdAt}` | "Coming up": trips, appointments, nights out. Shown on Today and on the matching day in Dinners |
 | `dinners` | id is the date `YYYY-MM-DD`: `{title, recipe, note, time, link, servings, ingredients[], steps[]}` | Weeks run Sunday to Saturday. Tapping a day with a recipe (cookbook key, stored ingredients and steps, or a link) opens the recipe sheet |
 | `events` | `{name, short, date, time, theme, weekend, dinnerAt, appsAt, breakfastAt, ovenCap, headcount}` | Hosting events, grouped by `weekend` |
-| `tasks` | `{eventId, title, detail, date, time, t, cat, who, done, recipe}` | Hosting checklist. `cat` is invites, reservations, rooms, house, food or freezer (take something out to thaw). `t` is 24h time used for ordering within a day. Each upcoming holiday weekend's tasks also show as a list at the top of Lists (`_host:<weekend>`) and as a card on Today |
+| `tasks` | `{eventId, title, detail, date, time, t, cat, who, done, recipe}` | Dated to-dos. With an `eventId` they are the hosting checklist; with an empty `eventId` they are household to-dos that show on Calendar and Today only. `cat` is invites, reservations, rooms, house, food or freezer (take something out to thaw). `t` is 24h time used for ordering within a day. Each upcoming holiday weekend's tasks also show as a list at the top of Lists (`_host:<weekend>`) and as a card on Today |
 | `dishes` | `{eventId, name, recipe, course, who, makeAhead, order, ready}` | Menus |
 | `guests` | `{eventId, name, diet, rsvp}` | `rsvp` is yes, no or maybe |
 | `extras` | `{eventId, item, detail, done}` | Supplies to buy |
