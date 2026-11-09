@@ -11,17 +11,17 @@ const HTABS = [["plan","Checklist"],["menu","Menu"],["day","Day-of"],["shop","Sh
 const CATS = [["invites","Invites"],["reservations","Reservations"],["rooms","Rooms"],["house","House"],["food","Food"],["freezer","Freezer"]];
 const ROOM_ITEMS = ["Fresh sheets","Towels","Extra blanket","Chocolate on the pillow"];
 const WK_NAMES = {thanksgiving:"Thanksgiving", christmas:"Christmas"};
-const VIEWS = [["today","Today"],["lists","Lists"],["dinners","Dinners"],["hosting","Hosting"],["cookbook","Cookbook"]];
+const VIEWS = [["today","Today"],["cal","Calendar"],["lists","Lists"],["dinners","Dinners"],["hosting","Hosting"],["cookbook","Cookbook"]];
 const RCATS = ["Breakfast","Appetizers","Mains","Sides","Desserts","Drinks","For the pups"];
 const LIST_ALIASES = {grocery:["grocery","groceries","store","supermarket","food shop","shopping"], costco:["costco","bulk","warehouse"], todo:["to-do","todo","to do","tasks","errands","list"], ideas:["ideas","meal ideas","dinner ideas","meals","dinners"]};
 
 const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], checks:{}, dinners:{}, shared:{}};
-const U = {view:"today", wk:null, sub:"all", htab:"plan", catF:"all", hlF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All", ideaTags:[]};
+const U = {view:"today", calMode:"week", calOff:0, calSel:null, calKind:"plan", wk:null, sub:"all", htab:"plan", catF:"all", hlF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All", ideaTags:[]};
 let db = null, sample = null, ready = false, noDb = false, seen = 0;
 const ls = {get:(k) => { try { return localStorage.getItem(k); } catch(e) { return null; } }, set:(k,v) => { try { localStorage.setItem(k,v); } catch(e) {} }};
-U.view = ["today","lists","dinners","hosting","cookbook","plans"].includes(ls.get("hph_view")) ? ls.get("hph_view") : "today";
+U.view = ["today","cal","lists","dinners","hosting","cookbook","plans"].includes(ls.get("hph_view")) ? ls.get("hph_view") : "today";
 U.wk = ls.get("hph_wk"); U.htab = ls.get("hph_htab") || "plan"; U.listId = ls.get("hph_list");
-if (/^#(today|lists|dinners|hosting|cookbook|plans)$/.test(location.hash)) U.view = location.hash.slice(1);
+if (/^#(today|cal|lists|dinners|hosting|cookbook|plans)$/.test(location.hash)) U.view = location.hash.slice(1);
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -38,6 +38,7 @@ const weekStart = s => { const d = pd(s); d.setDate(d.getDate() - d.getDay()); r
 const norm = s => String(s||"").toLowerCase().replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
 const CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>';
 const I = {
+  cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h2M14 14h2M8 17.5h2"/>',
   today:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   lists:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
   dinners:'<path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"/>',
@@ -144,13 +145,13 @@ function render(){
   const counts = {lists: S.items.filter(i => !i.done).length, hosting: S.tasks.filter(t => !t.done && daysTo(t.date||todayISO()) <= 7).length};
   setHTML($("#nav"), VIEWS.map(([k,l]) => `<button class="nav-item" role="tab" aria-selected="${U.view===k}" data-act="view" data-id="${k}">${svg(k)}<span>${l}</span>${counts[k] ? `<span class="n">${counts[k]}</span>` : ""}</button>`).join(""));
   $("#railfoot").innerHTML = `${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}<br>${ready ? (db ? "Shared with the household" : "Not signed in") : "Loading…"}`;
-  const key = [U.view, U.listId, U.wk, U.sub, U.htab, U.weekOff].join("|");
+  const key = [U.view, U.listId, U.wk, U.sub, U.htab, U.weekOff, U.calMode, U.calOff].join("|");
   let body;
   if (!ready) body = `<p class="status">Loading the house…</p>`;
   else if (noDb) body = `<div class="empty"><b>Sign in to claude.ai</b>Your lists, dinners and hosting plans live in the shared database. Sign in and reopen this page.</div>`;
-  else body = ({today:vToday, lists:vLists, dinners:vDinners, hosting:vHosting, cookbook:vCookbook, plans:vPlans})[U.view]();
+  else body = ({today:vToday, cal:vCal, lists:vLists, dinners:vDinners, hosting:vHosting, cookbook:vCookbook, plans:vPlans})[U.view]();
   const sc = $("#main");
-  setHTML(sc, `<div class="wrap">${body}</div>`);
+  setHTML(sc, `<div class="wrap ${U.view === "cal" ? "wide" : ""}">${body}</div>`);
   if (render.k !== key) { sc.scrollTop = 0; render.k = key; }
 }
 
@@ -230,7 +231,7 @@ function wxErr(e){ const code = e && e.code;
 const wxHandler = key => ev => {
   if (ev.type === "data") { const p = ev.result && ev.result.payload; if (p && typeof p === "object") { WX[key] = p; WX.at = (ev.result.cache && ev.result.cache.storedAt) || Date.now(); WX.state = "ok"; WX.stale = false; } }
   else wxErr(ev.error);
-  if (U.view === "today") render();
+  if (U.view === "today" || U.view === "cal") render();
 };
 function wxStart(m){ if (!m) return; WX.mcp = m; WX.state = "loading"; if (U.view === "today") render();
   m.watchTool(WX_SERVER, "widgets-current-claude", WX_IN, wxHandler("cur"), {refetchInterval: 30*60*1000, cache:{staleTime: 10*60*1000, gcTime: 6*3600*1000}});
@@ -302,7 +303,7 @@ function calErr(e){ const code = e && e.code, retract = () => { CAL.today = null
 const calHandler = key => ev => {
   if (ev.type === "data") { CAL[key] = calParse(ev.result); CAL.state = "ok"; CAL.stale = false; }
   else calErr(ev.error);
-  if (U.view === "today") render();
+  if (U.view === "today" || U.view === "cal") render();
 };
 function calWatch(){ if (!CAL.mcp) return; const t = todayISO(); if (CAL.day === t) return; CAL.day = t;
   CAL.un.forEach(u => { try { u(); } catch (e) {} }); CAL.today = null; CAL.tomorrow = null;
@@ -426,6 +427,83 @@ function vDinners(){
   const ideasHtml = `<div class="ideas-panel"><div class="ideas-head"><p class="eyebrow">Meal ideas</p>${ideasList && safeUrl(ideasList.link) ? `<a class="pill link ext" href="${esc(safeUrl(ideasList.link))}" target="_blank" rel="noopener" style="margin:0">${esc(linkLabel(ideasList.link))} board ↗</a>` : ""}</div>${tagChips(allIdeas)}${ideas.length ? `<div class="ideas">${ideas.map(i => { const tm = shortTime(i.time, i.recipe || recipeFor(i.text)); return `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="idearecipe" data-id="${i.id}"><span class="plus" aria-hidden="true">+</span><span class="idea-t">${esc(i.text)}${tm || ideaTags(i).length ? `<span>${esc([tm, ...ideaTags(i).filter(t => ["crockpot","instantpot","sheetpan","onepot","airfryer","grill"].includes(t)).map(t => TAG_LABEL[t])].filter(Boolean).join(" · "))}</span>` : ""}</span></button>`; }).join("")}</div>` : allIdeas.length ? `<p class="note">Nothing matches those filters.</p>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
     ${U.pickIdea && ideas.find(i => i.id === U.pickIdea) ? `<p class="note" style="margin-top:14px">Put <b>${esc(ideas.find(i => i.id === U.pickIdea).text)}</b> on which night?</p><div class="daypick">${days.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(ideas.find(i => i.id === U.pickIdea).text)}">${fmt(d,{weekday:"short",day:"numeric"})}</button>`).join("")}</div>` : ""}</div>`;
   return `<div class="ph"><div><h1>Dinners</h1><div class="sub">Plan the week on Sunday, shop once.</div></div></div>${nav}${cards}${edit}${ideasHtml}`;
+}
+
+/* ───────────────────────── Calendar: everything with a date, in one place ─────────────────────────
+   Meetings (Outlook), dinners, plans, hosting events and hosting to-dos, by week or month. Tap a day for its detail and one add box.
+   Meetings come from the live connector for the visible week when the viewer has it, else from the hourly shared snapshot. */
+const CALWK = {key:null, parts:{}, un:[]};
+function calWeekWatch(start){ if (!CAL.mcp || CALWK.key === start) return; CALWK.key = start; CALWK.parts = {};
+  CALWK.un.forEach(u => { try { u(); } catch (e) {} });
+  const opts = {refetchInterval: 15*60*1000, cache:{staleTime: 10*60*1000, gcTime: 12*3600*1000}};
+  const watch = (a, b) => CAL.mcp.watchTool(CAL_SERVER, CAL_TOOL, calIn(a, b), ev => { if (ev.type === "data" && CALWK.key === start) { CALWK.parts[a] = {to:b, list:calParse(ev.result)}; if (U.view === "cal") render(); } }, opts);
+  CALWK.un = [watch(start, addDays(start, 4)), watch(addDays(start, 4), addDays(start, 7))]; }
+const meetingsOn = d => { const part = Object.entries(CALWK.parts).find(([a, p]) => d >= a && d < p.to);
+  const t = todayISO(), snap = S.shared.calendar && S.shared.calendar.days;
+  const list = part ? part[1].list : (CAL.today && d === t) ? CAL.today : (CAL.tomorrow && d === addDays(t,1)) ? CAL.tomorrow : (snap && snap[d]) || null;
+  return list ? calDay(list, d) : null; };
+const wxOn = d => { const src = WX.daily || (S.shared.weather && S.shared.weather.daily); const f = src && (src.dailyForecast || []).find(x => String(x.date || "").slice(0,10) === d); return f || null; };
+const evsOn = d => S.events.filter(e => e.date === d);
+const tasksOn = d => S.tasks.filter(x => x.date === d).sort(byDay);
+const CALI = {dinner:'<path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"/>', host:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>', fz:'<path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5"/>'};
+const ci = k => `<svg viewBox="0 0 24 24" aria-hidden="true" class="ci">${CALI[k]}</svg>`;
+
+function dayItems(d, compact){
+  const t = todayISO(), m = S.dinners[d], mt = meetingsOn(d), out = [];
+  plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="view" data-id="plans" title="${esc(p.title)}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
+  evsOn(d).forEach(e => out.push(`<button class="ce host" data-act="gohost" data-id="${esc(wkKey(e))}">${ci("host")}${esc(e.short || e.name)}${e.time && !compact ? `<span>${esc(e.time)}</span>` : ""}</button>`));
+  if (mt) mt.allDay.forEach(e => out.push(`<div class="ce meet all">${esc(e.subject || "All day")}</div>`));
+  if (m && m.title) out.push(`<button class="ce dinner" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}">${ci("dinner")}${esc(m.title)}</button>`);
+  if (mt) mt.timed.forEach(x => { const href = safeUrl(x.e.webLink), inner = `<b>${calTime(x.s)}</b> ${esc(x.e.subject || "(No title)")}`;
+    out.push(href ? `<a class="ce meet" href="${esc(href)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="ce meet">${inner}</div>`); });
+  const tk = tasksOn(d), nDone = tk.filter(x => x.done).length;
+  tk.filter(x => !x.done).forEach(x => out.push(`<div class="ce todo ${d < t ? "late" : ""}">${ck(false, "task", x.id, x.title)}<span>${x.cat === "freezer" ? ci("fz") : ""}${esc(x.title)}</span></div>`));
+  if (nDone && !compact) out.push(`<button class="ce donecount" data-act="calday" data-id="${d}">${CHECK}${nDone} done</button>`);
+  return out;
+}
+
+function vCal(){
+  const t = todayISO();
+  const legend = `<div class="cal-legend"><span class="lg meet">Meetings</span><span class="lg dinner">Dinner</span><span class="lg plan">Plans</span><span class="lg host">Hosting</span><span class="lg todo">To-dos</span></div>`;
+  const modes = `<div class="seg" role="tablist" aria-label="View"><button aria-pressed="${U.calMode==="week"}" data-act="calmode" data-id="week">Week</button><button aria-pressed="${U.calMode==="month"}" data-act="calmode" data-id="month">Month</button></div>`;
+  let range, grid;
+  if (U.calMode === "month") {
+    const base = pd(t); base.setDate(1); base.setMonth(base.getMonth() + U.calOff); const first = iso(base), gStart = weekStart(first);
+    const mEnd = (() => { const e = new Date(base); e.setMonth(e.getMonth()+1); e.setDate(0); return iso(e); })();
+    const weeks = Math.ceil((daysTo(mEnd) - daysTo(gStart) + 1) / 7);
+    range = fmt(first, {month:"long", year:"numeric"});
+    const cells = []; for (let i = 0; i < weeks*7; i++) { const d = addDays(gStart, i), items = dayItems(d, true), out = d.slice(0,7) !== first.slice(0,7);
+      cells.push(`<div class="mcell ${d===t?"today":""} ${out?"out":""} ${U.calSel===d?"sel":""}" data-act="calday" data-id="${d}" role="button" tabindex="0"><div class="mnum">${pd(d).getDate()}</div><div class="mitems">${items.slice(0,3).join("")}${items.length > 3 ? `<div class="more">+${items.length - 3} more</div>` : ""}</div></div>`); }
+    grid = `<div class="month"><div class="mhead">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x => `<div>${x}</div>`).join("")}</div><div class="mgrid">${cells.join("")}</div></div>`;
+  } else {
+    const start = addDays(weekStart(t), U.calOff*7), days = [0,1,2,3,4,5,6].map(i => addDays(start, i));
+    calWeekWatch(start);
+    range = `${fmt(start,{month:"long",day:"numeric"})} – ${fmt(days[6],{month: pd(start).getMonth()===pd(days[6]).getMonth() ? undefined : "long", day:"numeric"})}`;
+    grid = `<div class="wgrid">${days.map(d => { const items = dayItems(d, false), w = wxOn(d), n = daysTo(d);
+      return `<div class="wcol ${d===t?"today":""} ${n<0?"past":""} ${U.calSel===d?"sel":""}"><button class="whead" data-act="calday" data-id="${d}" aria-label="${fmt(d,{weekday:"long",month:"long",day:"numeric"})}"><span class="wd">${fmt(d,{weekday:"short"})}</span><span class="wn">${pd(d).getDate()}</span>${w ? `<span class="ww">${wxSvg(w.day.icon)}${w.day.temperature}°<i>${w.night.temperature}°</i></span>` : ""}</button>
+        <div class="witems">${items.join("") || `<button class="wempty" data-act="calday" data-id="${d}">Free</button>`}</div></div>`; }).join("")}</div>`;
+  }
+  const head = `<div class="ph"><div><h1>Calendar</h1><div class="sub">Meetings, dinners, plans and hosting in one place</div></div>${modes}</div>
+    <div class="weeknav cal-nav"><span class="range">${range}</span><button class="rbtn" data-act="caloff" data-id="-1" aria-label="Previous">${svg("prev")}</button>${U.calOff ? `<button class="btn sm ghost" data-act="caloff" data-id="0">Today</button>` : ""}<button class="rbtn" data-act="caloff" data-id="1" aria-label="Next">${svg("next")}</button></div>${legend}`;
+  return head + grid + calDayPanel(U.calSel || t);
+}
+
+function calDayPanel(d){
+  const t = todayISO(), m = S.dinners[d] || {}, mt = meetingsOn(d), pl = plansOn(d), evs = evsOn(d), tk = tasksOn(d), w = wxOn(d);
+  const now = new Date(), nowMin = d === t ? now.getHours()*60 + now.getMinutes() : null;
+  const sec = (label, cls, body) => `<div class="dsec ${cls}"><p class="eyebrow">${label}</p>${body}</div>`;
+  const hostWk = (evs[0] && wkKey(evs[0])) || ((S.events.filter(e => e.date >= d).sort(byDate)[0]) || {}).weekend;
+  const parts = [
+    sec("Dinner", "dinner", m.title ? `<div class="drow"><b>${esc(m.title)}</b>${m.note ? `<span>${esc(m.note)}</span>` : ""}<div class="inline">${recipeObj(m) ? `<button class="btn sm ghost" data-act="dayrecipe" data-id="${d}">Recipe</button>` : ""}<button class="btn sm quiet" data-act="editdinner" data-id="${d}">Change</button></div></div>` : `<div class="drow none">Nothing planned <button class="btn sm ghost" data-act="editdinner" data-id="${d}">Plan dinner</button></div>`),
+    evs.length || pl.length ? sec("Plans &amp; events", "plan", `<div class="list">${evs.map(e => `<button class="drow link" data-act="gohost" data-id="${esc(wkKey(e))}"><b>${esc(e.name)}</b><span>${esc(e.time || "")}</span></button>`).join("")}${pl.map(p => planRow(p)).join("")}</div>`) : "",
+    mt && (mt.timed.length || mt.allDay.length) ? sec("Meetings", "meet", `${mt.allDay.length ? `<div class="cal-all">${mt.allDay.map(e => `<span class="pill">${esc(e.subject || "All day")}</span>`).join("")}</div>` : ""}<div class="cal-list">${calRows(mt.timed, nowMin)}</div>`) : "",
+    tk.length ? sec("Hosting to-dos", "todo", `<div class="list">${tk.map(x => `<div class="row ${x.done?"done":""}">${ck(x.done,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div>${x.detail ? `<div class="s">${esc(x.detail)}</div>` : ""}${x.cat === "freezer" ? `<span class="pill cat-freezer">Freezer</span>` : ""}${x.recipe && R[x.recipe] ? `<button class="pill link" data-act="recipe" data-id="${x.recipe}">Recipe</button>` : ""}</div>${x.time ? `<span class="time">${esc(x.time)}</span>` : ""}</div>`).join("")}</div>`) : ""
+  ].filter(Boolean).join("");
+  const kinds = [["plan","Plan"],["dinner","Dinner"], ...(hostWk ? [["task","Hosting to-do"]] : [])];
+  const kind = kinds.some(k => k[0] === U.calKind) ? U.calKind : "plan";
+  return `<div class="card dpanel" id="dpanel"><div class="dhead"><div><p class="eyebrow">${d === t ? "Today" : dayTag(d) === "Overdue" ? "Past" : dayTag(d)}</p><h2>${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h2></div>${w ? `<div class="dwx">${wxSvg(w.day.icon)}<span><b>${w.day.temperature}°</b> / ${w.night.temperature}°<br>${esc(w.day.phrase || "")}</span></div>` : ""}</div>
+    <div class="dgrid">${parts}</div>
+    <form class="add cal-add" data-form="calnew" data-date="${d}" data-wk="${esc(hostWk || "")}"><div class="seg sm" role="tablist" aria-label="Add a">${kinds.map(([k,l]) => `<button type="button" aria-pressed="${kind===k}" data-act="calkind" data-id="${k}">${l}</button>`).join("")}</div><input type="text" id="cnt" placeholder="${kind === "dinner" ? "What's for dinner?" : kind === "task" ? "A hosting to-do for this day" : "A plan for this day"}" aria-label="Add to this day" autocomplete="off"><input type="text" id="cntt" placeholder="Time (optional)" style="flex:0 1 140px" ${kind === "dinner" ? "hidden" : ""}><button class="btn">Add</button></form></div>`;
 }
 
 /* ───────────────────────── 3. Hosting (ported engine) ───────────────────────── */
@@ -832,6 +910,10 @@ document.addEventListener("click", async ev => {
     case "htab": U.htab = id; ls.set("hph_htab", id); break;
     case "cat": U.catF = id; break;
     case "hlf": U.hlF = id; break;
+    case "calmode": U.calMode = id; U.calOff = 0; break;
+    case "caloff": U.calOff = id === "0" ? 0 : U.calOff + (+id); if (id === "0") U.calSel = null; break;
+    case "calday": U.calSel = id; if (U.calMode === "month") { U.calMode = "week"; U.calOff = Math.round((pd(weekStart(id)) - pd(weekStart(todayISO()))) / (7*864e5)); } render(); { const p = $("#dpanel"); if (p) p.scrollIntoView({behavior:"smooth", block:"start"}); } return;
+    case "calkind": U.calKind = id; render(); { const i = $("#cnt"); if (i) i.focus(); } return;
     case "dayev": U.dayEv = id; break;
     case "task": { const x = S.tasks.find(t => t.id === id); if (x) w("tasks", id, {done:!x.done}); break; }
     case "dish": { const x = S.dishes.find(t => t.id === id); if (x) w("dishes", id, {ready:!x.ready}); break; }
@@ -866,7 +948,7 @@ document.addEventListener("click", async ev => {
   }
   render();
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape") { if (COOK) stopCook(); else $("#overlay").innerHTML = ""; } });
+document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; } if (e.key === "Escape") { if (COOK) stopCook(); else $("#overlay").innerHTML = ""; } });
 document.addEventListener("input", e => { if (e.target.id === "cb-q") { U.q = e.target.value; render(); } });
 document.addEventListener("change", e => { const i = e.target.closest("[data-set]"); if (!i || !i.value) return; w("events", i.dataset.ev, {[i.dataset.set]: i.dataset.set === "ovenCap" ? +i.value : i.value}); });
 document.addEventListener("submit", async e => {
@@ -878,6 +960,12 @@ document.addEventListener("submit", async e => {
   if (f === "list" && v("#nl")) { const name = v("#nl"); const id = await add("lists", {name, order:S.lists.length, createdAt:Date.now()}); if (id) { U.listId = id; ls.set("hph_list", id); } }
   if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe: recipe || recipeFor(title), note:v("#dn-note"), time:v("#dn-time"), link:v("#dn-link")}, "set"); U.editDinner = null; toast("Saved"); }
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
+  if (f === "calnew" && v("#cnt")) { const d = e.target.dataset.date, text = v("#cnt"), tm = v("#cntt"), kind = U.calKind;
+    if (kind === "dinner") { const cur = S.dinners[d] || {}; await w("dinners", d, {...cur, title:text, recipe:recipeFor(text), note:cur.note || "", time:cur.time || "", link:cur.link || ""}, "set"); toast(`${text} on ${fmt(d,{weekday:"long"})}`); }
+    else if (kind === "task" && e.target.dataset.wk) { const evs = S.events.filter(x => wkKey(x) === e.target.dataset.wk).sort(byDate), ev = evs.find(x => x.date >= d) || evs[evs.length-1];
+      if (ev) { await add("tasks", {eventId:ev.id, title:text, date:d, time:tm, t:to24(tm), cat:"house", detail:"", recipe:recipeFor(text), done:false}); toast(`Added for ${fmt(d,{weekday:"long"})}`); } }
+    else { await add("plans", {title:text, date:d, endDate:"", time:tm, note:"", createdAt:Date.now()}); toast(`Added to ${fmt(d,{weekday:"long"})}`); }
+    e.target.reset(); render(); const q = $("#cnt"); if (q) q.focus(); return; }
   if (f === "htask" && v("#nht")) { const k = e.target.dataset.wk, evs = S.events.filter(x => wkKey(x) === k).sort(byDate), d = v("#nhtd") || todayISO();
     const ev = evs.find(x => x.date >= d) || evs[evs.length-1];
     if (ev) { await add("tasks", {eventId:ev.id, title:v("#nht"), date:d, time:"", t:"", cat:v("#nhtc") || "house", detail:"", recipe:recipeFor(v("#nht")), done:false}); toast(`Added for ${fmt(d,{weekday:"long"})}`); }
@@ -928,7 +1016,7 @@ renderCapture(); render();
   cols.forEach(c => db.collection(c).onSnapshot(s => { S[c] = s.docs.map(d => ({id:d.id, ...d.data()})); first(); }, () => first()));
   db.collection("checks").onSnapshot(s => { S.checks = {}; s.docs.forEach(d => S.checks[d.id] = d.data()); first(); }, () => first());
   db.collection("dinners").onSnapshot(s => { S.dinners = {}; s.docs.forEach(d => S.dinners[d.id] = d.data()); first(); }, () => first());
-  db.collection("shared").onSnapshot(s => { S.shared = {}; s.docs.forEach(d => S.shared[d.id] = d.data()); if (U.view === "today") render(); }, () => {});
+  db.collection("shared").onSnapshot(s => { S.shared = {}; s.docs.forEach(d => S.shared[d.id] = d.data()); if (U.view === "today" || U.view === "cal") render(); }, () => {});
   db.collection("habits").onSnapshot(s => { S.habits = s.docs.map(d => ({id:d.id, ...d.data()})); render(); }, () => {});
   db.collection("habitlog").onSnapshot(s => { S.habitlog = {}; s.docs.forEach(d => S.habitlog[d.id] = d.data()); render(); }, () => {});
   setTimeout(() => { if (!ready) { ready = true; render(); } }, 8000);

@@ -423,3 +423,108 @@ details.cook summary{cursor:pointer;font-weight:500;color:var(--green);padding:8
   .capform input{font-size:16px}
   .ph h1{font-size:32px}
 }
+
+/* Calendar: one color per kind of thing, used in the legend, the week grid, the month grid and the day panel.
+   Meetings blue, dinner green, plans clay, hosting events berry, hosting to-dos gold. */
+.wrap.wide{max-width:1400px}
+.cal-nav{margin:0 0 10px}
+.cal-legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 14px;font-size:12px;color:var(--muted);letter-spacing:.04em}
+.cal-legend .lg{display:inline-flex;align-items:center;gap:6px}
+.cal-legend .lg::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--k)}
+.lg.meet,.ce.meet,.dsec.meet{--k:var(--blue);--ks:var(--blue-soft)}
+.lg.dinner,.ce.dinner,.dsec.dinner{--k:var(--green);--ks:var(--green-soft)}
+.lg.plan,.ce.plan,.dsec.plan{--k:var(--clay);--ks:var(--clay-soft)}
+.lg.host,.ce.host{--k:var(--berry);--ks:var(--berry-soft)}
+.lg.todo,.ce.todo,.dsec.todo{--k:var(--gold);--ks:var(--gold-soft)}
+
+.wgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:stretch}
+.wcol{background:var(--card);border:1px solid var(--line);border-radius:16px;min-height:340px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.wcol.past{opacity:.62}
+.wcol.today{background:var(--raised);border-color:var(--green);box-shadow:var(--shadow)}
+.wcol.sel{border-color:var(--ink)}
+.whead{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:8px;align-items:center;border:0;background:none;padding:10px 10px 8px;cursor:pointer;text-align:left;font:inherit;color:inherit;border-bottom:1px solid var(--line)}
+.whead .wd{grid-column:1/3;font:500 11px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.whead .wn{font-family:var(--display);font-size:30px;line-height:1.05;font-weight:500}
+.wcol.today .whead .wn{color:var(--green)}
+.whead .ww{justify-self:end;display:flex;align-items:center;gap:3px;font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+.whead .ww svg{width:18px;height:18px;fill:none;stroke:var(--gold);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.whead .ww i{font-style:normal;color:var(--faint);margin-left:2px}
+.witems{display:flex;flex-direction:column;gap:5px;padding:8px 6px 10px}
+.wempty{border:0;background:none;color:var(--faint);font:400 12px var(--sans);padding:6px 4px;text-align:left;cursor:pointer}
+
+.ce{display:block;width:100%;text-align:left;border:0;margin:0;font:400 12.5px/1.3 var(--sans);color:var(--ink);background:var(--ks);border-left:3px solid var(--k);border-bottom:5px solid transparent;border-radius:7px;padding:5px 7px 0;text-decoration:none;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word;cursor:pointer}
+.ce b{font-weight:500;color:var(--k);font-variant-numeric:tabular-nums}
+.ce span{display:block;color:var(--muted);font-size:11.5px}
+.ce .ci{width:13px;height:13px;vertical-align:-2px;margin-right:4px;fill:none;stroke:var(--k);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ce.meet{background:transparent;border-left-width:2px;border-bottom-width:3px;padding:3px 6px 0;cursor:default}
+a.ce.meet{cursor:pointer}
+.ce.meet.all{background:var(--ks)}
+.ce.todo{display:flex;align-items:flex-start;gap:6px;background:transparent;border-left:0;padding:3px 2px;cursor:default;-webkit-line-clamp:unset}
+.ce.todo .ck{width:20px;height:20px;flex:0 0 20px;border-width:1.5px;border-color:var(--k)}
+.ce.todo .ck svg{width:12px;height:12px}
+.ce.todo span{display:block;color:var(--ink);font-size:12.5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.ce.todo .ci{stroke:var(--blue)}
+.ce.todo.done span{color:var(--faint);text-decoration:line-through}
+.ce.todo.late span{color:var(--warn)}
+.ce.donecount{background:none;border-left:0;color:var(--faint);font-size:11.5px;padding:2px 4px;display:flex;align-items:center;gap:4px}
+.ce.donecount svg{width:12px;height:12px;stroke:var(--ok)}
+
+.month{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.mhead{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-bottom:1px solid var(--line)}
+.mhead div{padding:8px 10px;font:500 11px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.mcell{min-height:118px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px;cursor:pointer;min-width:0;display:flex;flex-direction:column;gap:4px}
+.mcell:nth-child(7n){border-right:0}
+.mcell.out{background:var(--bg)}
+.mcell.out .mnum{color:var(--faint)}
+.mcell.today .mnum{background:var(--green);color:#fff}
+.mcell.sel{box-shadow:inset 0 0 0 2px var(--ink)}
+.mnum{align-self:flex-start;min-width:26px;height:26px;padding:0 6px;border-radius:var(--pill);display:grid;place-items:center;font:500 13px var(--sans);font-variant-numeric:tabular-nums}
+.mitems{display:flex;flex-direction:column;gap:3px;min-width:0}
+.mitems .ce{font-size:11.5px;padding:2px 6px;-webkit-line-clamp:1}
+.mitems .ce.todo{padding:1px 0}
+.mitems .ce.todo .ck{width:16px;height:16px;flex-basis:16px}
+.mitems .ce span{font-size:11.5px;-webkit-line-clamp:1}
+.mitems .more{font-size:11px;color:var(--muted);padding-left:4px}
+
+.dpanel{margin-top:18px;scroll-margin-top:12px}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.dhead h2{margin:0;font-family:var(--display);font-weight:500;font-size:32px;line-height:1.1}
+.dhead .eyebrow{margin-bottom:4px}
+.dwx{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.dwx b{color:var(--ink);font-size:16px}
+.dwx svg{width:32px;height:32px;fill:none;stroke:var(--gold);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px;margin-top:14px}
+.dsec{border-left:3px solid var(--k);padding:2px 0 2px 14px;min-width:0}
+.dsec .eyebrow{color:var(--k);margin-bottom:6px}
+.drow{display:flex;flex-direction:column;gap:2px;padding:4px 0;border:0;background:none;text-align:left;font:inherit;color:inherit;width:100%}
+.drow b{font-weight:500}
+.drow span{font-size:13px;color:var(--muted)}
+.drow.none{flex-direction:row;align-items:center;gap:10px;color:var(--muted)}
+.drow.link{cursor:pointer}
+.drow .inline{margin-top:6px}
+.dsec .row{padding:8px 0}
+.cal-add{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.cal-add input[type=text]#cnt{flex:1 1 220px}
+.seg.sm{padding:3px}
+.seg.sm button{padding:6px 12px;min-height:34px;font-size:13px}
+
+@media (max-width:980px){
+  .wcol{min-height:280px}
+  .whead .ww i{display:none}
+}
+/* Narrow screens: the week becomes a day-by-day agenda, the month keeps its grid with dots. */
+@media (max-width:760px){
+  .wgrid{grid-template-columns:1fr;gap:10px}
+  .wcol{min-height:0;flex-direction:row}
+  .whead{flex:0 0 74px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;border-bottom:0;border-right:1px solid var(--line)}
+  .whead .ww{justify-self:start}
+  .witems{flex:1 1 auto;min-width:0}
+  .ce{-webkit-line-clamp:2;font-size:13.5px}
+  .mcell{min-height:64px;padding:4px}
+  .mitems .ce{font-size:0;padding:0;height:6px;border-left-width:0;border-radius:3px;background:var(--k)}
+  .mitems .ce.todo{display:none}
+  .mitems .more{display:none}
+  .mhead div{padding:6px 4px;letter-spacing:.06em;text-align:center}
+  .mnum{align-self:center}
+}

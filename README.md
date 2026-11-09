@@ -8,7 +8,7 @@ Live app: https://claude.ai/artifact/Qu5T4kmZDYyRck4Vz3HN3S (a claude.ai artifac
 
 - `index.html` – the page shell. Published as the artifact's page; the publish step wraps it in a document skeleton, so it carries no `<html>`/`<head>` of its own.
 - `app.css` – all styling. Light only. Tokens at the top of the file are the design system.
-- `app.js` – all behaviour, in six sections: core and state; Today, Lists, Dinners; Hosting (the original holiday engine, including the one-oven day-of scheduler); Cookbook and cooking mode; Capture (speech in, Claude sorts, undo); events and boot.
+- `app.js` – all behaviour, in six sections: core and state; Today, Calendar (week, month and day: meetings, dinners, plans, hosting events and to-dos in one place), Lists, Dinners; Hosting (the original holiday engine, including the one-oven day-of scheduler); Cookbook and cooking mode; Capture (speech in, Claude sorts, undo); events and boot.
 - `cookbook.js` – the 53 recipes plus day-of timing and oven flexibility per recipe. Generated from `src/recipes.json`; recipes are edited there.
 - `dev/` – a local harness that mocks the artifact runtime (`window.claude`) with an in-memory database so the app can be driven in a browser without publishing. Never published.
 
@@ -27,7 +27,7 @@ Live app: https://claude.ai/artifact/Qu5T4kmZDYyRck4Vz3HN3S (a claude.ai artifac
 | `extras` | `{eventId, item, detail, done}` | Supplies to buy |
 | `rooms` | `{weekend, name, guests, nights, order, items}` | Guest rooms |
 | `checks` | id is the event id; `{<dishId_ingredientHash>: true}` | Shop checkmarks |
-| `shared` | `weather` and `calendar` | Hourly snapshots written by a scheduled task from Hailey's connectors (AccuWeather, Microsoft 365), so every household member sees the same weather and calendar. The page prefers live connector data when the viewer has it and falls back to these |
+| `shared` | `weather` and `calendar` (calendar covers today plus 6 days, for the Calendar view) | Hourly snapshots written by a scheduled task from Hailey's connectors (AccuWeather, Microsoft 365), so every household member sees the same weather and calendar. The page prefers live connector data when the viewer has it and falls back to these |
 | `habits`, `habitlog` | habits: `{name, icon, order, archived}`; habitlog: id is the date, `{<habitId>: true}` | Daily habits row on Today |
 
 Capabilities declared at publish: `db`, `user`, `sample`.
