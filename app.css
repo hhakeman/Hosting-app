@@ -648,3 +648,6 @@ a.ce.meet{cursor:pointer}
 body.dragging,body.dragging *{cursor:grabbing!important}
 .drop-over{box-shadow:inset 0 0 0 3px var(--blue)!important;background:var(--blue-soft)!important}
 @media (max-width:760px){.lg-hint{flex-basis:100%;margin-left:0}}
+
+.eform label.chk{flex-direction:row;align-items:center;gap:10px;font:500 15px var(--sans);letter-spacing:0;color:var(--ink)}
+.eform label.chk input{width:22px;height:22px;min-height:0;accent-color:var(--green)}

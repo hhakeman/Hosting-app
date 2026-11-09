@@ -149,6 +149,7 @@ function addSheet(d, kind, hostDefault){
     <form class="eform" data-form="dayadd" data-date="${d}">
       <label>${k === "dinner" ? "What's for dinner?" : k === "plan" ? "What's happening?" : "What needs doing?"}<input type="text" id="da-text" required autocomplete="off" placeholder="${k === "dinner" ? "e.g. Tacos" : k === "plan" ? "e.g. Haircut" : "e.g. Pick up the tablecloths"}" ${k === "dinner" && S.dinners[d] && S.dinners[d].title ? `value="${esc(S.dinners[d].title)}"` : ""}></label>
       ${k !== "dinner" ? `<div class="erow"><label>Time<input type="text" id="da-time" placeholder="Optional, e.g. 3:00 PM"></label>${k === "todo" ? `<label>For<select id="da-ev"><option value="">The house (no event)</option>${(wk ? wk.evs : []).map(e => `<option value="${e.id}" ${U.add.ev===e.id?"selected":""}>${esc(e.short || e.name)}</option>`).join("")}</select></label><label>Kind<select id="da-cat">${CATS.map(([c,l]) => `<option value="${c}" ${c==="house"?"selected":""}>${l}</option>`).join("")}</select></label>` : ""}</div>` : ""}
+      ${k === "plan" ? `<label class="chk"><input type="checkbox" id="da-weekly"> Every ${fmt(d,{weekday:"long"})}</label>` : ""}
       ${k === "todo" ? whoPick(U.add.who) : ""}
       <div class="inline eacts"><button class="btn">Add</button><button type="button" class="btn quiet" data-act="close">Cancel</button></div>
     </form></div></div>`;
@@ -172,7 +173,11 @@ const safeUrl = u => /^https?:\/\//i.test(String(u||"").trim()) ? String(u).trim
 const timePill = t => t ? `<span class="pill time">${esc(t)}</span>` : "";
 const shortTime = (t, k) => t || (k && R[k] ? (((R[k].meta.find(x => /^(Cook|Roast|Steam|Chill|Bake):/.test(x)) || "").split(": ")[1] || "").replace(/^about /i, "")) : "");
 const linkPill = u => safeUrl(u) ? `<a class="pill link ext" href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${esc(linkLabel(u))} ↗</a>` : "";
-const plansOn = d => S.plans.filter(p => p.date && p.date <= d && (p.endDate || p.date) >= d).sort((a,b) => (a.time||"").localeCompare(b.time||""));
+/* Plans can repeat weekly (repeat:"weekly", optional until and skip[] dates); occurrences are computed, never stored. */
+const repeats = p => p && p.repeat === "weekly";
+const occurs = (p, d) => !p.date ? false : repeats(p) ? (d >= p.date && (!p.until || d <= p.until) && pd(d).getDay() === pd(p.date).getDay() && !(p.skip || []).includes(d)) : (p.date <= d && (p.endDate || p.date) >= d);
+const nextOcc = (p, from) => { if (!repeats(p)) return p.date; let d = (from || todayISO()) > p.date ? (from || todayISO()) : p.date; for (let i = 0; i < 8; i++) { if (occurs(p, d)) return d; d = addDays(d, 1); } return null; };
+const plansOn = d => S.plans.filter(p => occurs(p, d)).sort((a,b) => (a.time||"").localeCompare(b.time||""));
 /* A recipe to show or cook can come from the cookbook (key), from fields stored on a dinner or idea (imported), or be link-only. */
 const hasContent = o => !!(o && ((o.ingredients||[]).length || (o.steps||[]).length));
 function recipeObj(o, src){ if (!o) return null;
@@ -243,7 +248,8 @@ function vToday(){
   const allDue = S.tasks.filter(x => !x.done && x.date && daysTo(x.date) <= 7).sort(byDay), due = allDue.slice(0,8), hw = hostWks()[0];
   const dueHtml = due.length ? `<div class="card soft"><div class="list">${due.map(x => { const d = daysTo(x.date), e = evById(x.eventId); return `<div class="row ${d<0?"overdue":""}">${ck(false,"task",x.id,x.title)}<div class="main tapedit" data-act="edittask" data-id="${x.id}"><div class="t">${esc(x.title)}</div><div class="s">${d<0?"Overdue · ":d===0?"Today · ":d===1?"Tomorrow · ":""}${fmt(x.date)}${x.time ? " · " + esc(x.time) : ""}${e ? " · " + esc(e.short||e.name) : ""}</div>${x.cat === "freezer" ? `<span class="pill cat-freezer">Freezer</span>` : ""}</div>${whoBtn("tasks", x.id, x.who)}</div>`; }).join("")}</div>
     ${hw ? `<div class="inline" style="margin-top:6px"><button class="btn sm ghost" data-act="golist" data-id="${HOST}${hw.k}">${allDue.length > due.length ? `See all ${allDue.length}` : `All ${esc(hostName(hw.k))} to-dos`}</button></div>` : ""}</div>` : "";
-  const soon = S.plans.filter(p => p.date && daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14).sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
+  const soonDate = p => repeats(p) ? nextOcc(p) : p.date;
+  const soon = S.plans.filter(p => p.date && (repeats(p) ? (soonDate(p) && daysTo(soonDate(p)) <= 7) : (daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14))).sort((a,b) => (soonDate(a)||"").localeCompare(soonDate(b)||"") || (a.time||"").localeCompare(b.time||""));
   const coming = `<div class="card soft">${soon.length ? `<div class="list">${soon.map(p => planRow(p)).join("")}</div>` : `<div class="empty" style="padding:12px 4px"><b>Nothing on the horizon</b>Trips, appointments, nights out. Add one below or say "New York next Sunday".</div>`}
     <form class="add" data-form="plan" style="margin-top:10px"><input type="text" id="np" placeholder="e.g. New York for the day" required><input type="date" id="npd" value="${t}"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button><button class="btn quiet" type="button" data-act="view" data-id="plans">All plans</button></form></div>`;
   return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${holidayOn(t) ? " · " + esc(holidayOn(t)) : ""}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div>${wxCard()}</div>
@@ -409,14 +415,16 @@ document.addEventListener("click", e => { const b = e.target.closest('[data-act=
   S.habitlog = {...(S.habitlog || {}), [t]: cur}; render(); w("habitlog", t, cur, "set"); });
 
 /* ───────────────────────── Plans (coming up) ───────────────────────── */
-function planRow(p){ const d = daysTo(p.date), multi = p.endDate && p.endDate !== p.date;
-  const when = `${d===0?"Today":d===1?"Tomorrow":d<0?"Started "+fmt(p.date):fmt(p.date,{weekday:"long",month:"short",day:"numeric"})}${multi ? " – " + fmt(p.endDate,{month:"short",day:"numeric"}) : ""}${p.time ? " · " + esc(p.time) : ""}`;
+function planRow(p){ const nx = repeats(p) ? nextOcc(p) : p.date, d = nx ? daysTo(nx) : -1, multi = !repeats(p) && p.endDate && p.endDate !== p.date;
+  const when = repeats(p) ? `Every ${fmt(p.date,{weekday:"long"})}${p.time ? " · " + esc(p.time) : ""}${nx ? ` · next ${d===0?"today":d===1?"tomorrow":fmt(nx,{month:"short",day:"numeric"})}` : " · ended"}`
+    : `${d===0?"Today":d===1?"Tomorrow":d<0?"Started "+fmt(p.date):fmt(p.date,{weekday:"long",month:"short",day:"numeric"})}${multi ? " – " + fmt(p.endDate,{month:"short",day:"numeric"}) : ""}${p.time ? " · " + esc(p.time) : ""}`;
   return `<div class="sw" data-col="plans" data-id="${p.id}"><div class="row plan"><span class="dot"></span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${when}${p.note ? " · " + esc(p.note) : ""}</div></div>${d > 1 && d <= 14 ? `<span class="pill">in ${d} days</span>` : ""}${del("plans", p.id)}</div><button class="sw-del" data-act="swdel" data-col="plans" data-id="${p.id}" tabindex="-1">Delete</button></div>`; }
 function vPlans(){
-  const t = todayISO(), all = S.plans.slice().sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
-  const up = all.filter(p => (p.endDate || p.date) >= t), past = all.filter(p => (p.endDate || p.date) < t).reverse();
+  const t = todayISO(), key = p => repeats(p) ? (nextOcc(p) || p.until || p.date) : p.date, all = S.plans.slice().sort((a,b) => key(a).localeCompare(key(b)) || (a.time||"").localeCompare(b.time||""));
+  const live = p => repeats(p) ? !!nextOcc(p) : (p.endDate || p.date) >= t;
+  const up = all.filter(live), past = all.filter(p => !live(p)).reverse();
   let html = "", last = "";
-  up.forEach(p => { const m = fmt(p.date,{month:"long",year:"numeric"}); if (m !== last) { if (last) html += `</div></div>`; last = m; html += `<h2 class="eyebrow">${m}</h2><div class="card soft"><div class="list">`; } html += planRow(p); });
+  up.forEach(p => { const m = fmt(key(p),{month:"long",year:"numeric"}); if (m !== last) { if (last) html += `</div></div>`; last = m; html += `<h2 class="eyebrow">${m}</h2><div class="card soft"><div class="list">`; } html += planRow(p); });
   if (last) html += `</div></div>`;
   return `<div class="ph"><div><h1>Coming up</h1><div class="sub">Trips, appointments, nights out. Not a calendar, just what's ahead.</div></div><button class="btn sm ghost" data-act="view" data-id="today">Back to Today</button></div>
     <div class="card"><form class="add" data-form="plan" style="margin-top:0"><input type="text" id="np" placeholder="What's coming up?" required><input type="date" id="npd" value="${t}" aria-label="Date"><input type="date" id="npe" aria-label="End date (optional)"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><input type="text" id="npn" placeholder="Note (optional)"><button class="btn">Add</button></form><p class="note">Second date is optional, for a trip that spans days.</p></div>
@@ -527,7 +535,7 @@ const ci = k => `<svg viewBox="0 0 24 24" aria-hidden="true" class="ci">${CALI[k
 function dayItems(d, compact){
   const t = todayISO(), m = S.dinners[d], mt = meetingsOn(d), out = [], hol = holidayOn(d);
   if (hol) out.push(`<div class="ce hol">${ci("star")}${esc(hol)}</div>`);
-  plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="view" data-id="plans" data-drag="plan" data-drag-id="${p.id}" data-drag-from="${d}" title="${esc(p.title)}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
+  plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="view" data-id="plans" ${repeats(p) ? "" : `data-drag="plan" data-drag-id="${p.id}" data-drag-from="${d}"`} title="${esc(p.title)}${repeats(p) ? " (every week)" : ""}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
   evsOn(d).forEach(e => out.push(`<button class="ce host" data-act="gohost" data-id="${esc(wkKey(e))}">${ci("host")}${esc(e.short || e.name)}${e.time && !compact ? `<span>${esc(e.time)}</span>` : ""}</button>`));
   if (mt) mt.allDay.forEach(e => out.push(`<div class="ce meet all">${esc(e.subject || "All day")}</div>`));
   if (m && m.title) out.push(`<button class="ce dinner" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}" data-drag="dinner" data-drag-id="${d}" data-drag-from="${d}">${ci("dinner")}${esc(m.title)}</button>`);
@@ -827,7 +835,7 @@ function captureContext(){
   const dishes = S.events.map(e => `${e.id}: ${S.dishes.filter(d => d.eventId === e.id).map(d => d.name + (d.ready ? " [made]" : "") + (d.who ? " (" + d.who + ")" : "")).join(", ") || "none"}`).join("\n");
   const tasks = S.tasks.filter(x => !x.done).sort(byDate).slice(0,60).map(x => `- ${x.title} (${x.eventId}, ${x.date||"no date"}${personOf(x.who) ? ", " + personOf(x.who).name : ""})`).join("\n");
   const cookbook = Object.entries(R).map(([k,v]) => `${k}=${v.title}`).join("; ");
-  const plans = S.plans.filter(p => (p.endDate || p.date) >= addDays(t,-1)).sort(byDate).slice(0,40).map(p => `- ${p.title} on ${p.date}${p.endDate && p.endDate !== p.date ? " to " + p.endDate : ""}${p.time ? " " + p.time : ""}`).join("\n");
+  const plans = S.plans.filter(p => (p.endDate || p.date) >= addDays(t,-1)).sort(byDate).slice(0,40).map(p => `- ${p.title} ${repeats(p) ? "every " + fmt(p.date,{weekday:"long"}) + " from " + p.date : "on " + p.date}${p.endDate && p.endDate !== p.date ? " to " + p.endDate : ""}${p.time ? " " + p.time : ""}`).join("\n");
   return `Today is ${fmt(t,{weekday:"long",month:"long",day:"numeric",year:"numeric"})} (${t}). This week runs ${ws} to ${addDays(ws,6)}, Sunday to Saturday.
 
 LISTS (name, id, open items):
@@ -861,7 +869,7 @@ Allowed action shapes:
 {"type":"remove_items","list":"Costco","items":["paper towels"]}
 {"type":"create_list","name":"Target"}
 {"type":"set_dinner","date":"YYYY-MM-DD","title":"Tacos","recipe":"","note":"","time":""}
-{"type":"add_plan","title":"New York for the day","date":"YYYY-MM-DD","endDate":"","time":"","note":""}
+{"type":"add_plan","title":"New York for the day","date":"YYYY-MM-DD","endDate":"","time":"","note":"","repeat":""}
 {"type":"remove_plan","match":"<words from the plan title>"}
 {"type":"clear_dinner","date":"YYYY-MM-DD"}
 {"type":"add_task","event":"<event id>","title":"...","date":"YYYY-MM-DD","time":"","cat":"food","detail":""}
@@ -879,6 +887,7 @@ Allowed action shapes:
 Rules:
 - Lists: Grocery is for food and supermarket items, Costco for bulk or anything said with "Costco", To-do for errands and general tasks, Meal ideas for dinner ideas ("idea: ..."). Use an existing list name exactly as given. Create a new list only when the note clearly names a list that doesn't exist.
 - "Tonight" is today. A weekday name means the next such day from today (today if it is that day); "next Sunday" after a weekday name means the one after this coming one only when the note says "next week". "What's for dinner" style notes are set_dinner. When the dinner matches a cookbook title, put its key in "recipe". A time estimate mentioned ("takes 30 minutes") goes in "time".
+- Something that happens every week ("gymnastics every Sunday 9 to 10:30") is one add_plan with "repeat":"weekly" and the date of the first upcoming occurrence.
 - Things happening on a date that are not to-dos (a trip, an appointment, a night out, a visitor, a game) are add_plan. A to-do is something to get done; a plan is somewhere to be.
 - Dinner ideas without a date ("idea: lemon chicken", "I want to make tacos sometime") are add_items on Meal ideas; a duration that was said ("takes 30 minutes") goes in the item's "time", and descriptors like crockpot, sheet pan, kid friendly, date night go in "tags".
 - cat is one of invites, reservations, rooms, house, food, freezer (freezer = take something out of the freezer to thaw). course is one of Breakfast, Appetizers, Dinner, Sides, Dessert, Drinks, Other. status is yes, no or maybe. For rsvp, leave event empty to update that guest on every event of their weekend.
@@ -936,7 +945,7 @@ async function applyActions(actions){
       else if (a.type === "add_plan") { const d = String(a.date||"").slice(0,10); const title = String(a.title||"").trim(); if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !title) { skipped.push("A plan needs a name and a date"); continue; }
         if (S.plans.some(p => p.date === d && norm(p.title) === norm(title))) { skipped.push(`${title} is already on ${fmt(d)}`); continue; }
         const endDate = /^\d{4}-\d{2}-\d{2}$/.test(a.endDate||"") && a.endDate > d ? a.endDate : "";
-        if (await created("plans", {title, date:d, endDate, time:String(a.time||""), note:String(a.note||""), createdAt:Date.now()})) done.push(`${fmt(d,{weekday:"short",month:"short",day:"numeric"})}: ${title}`); }
+        const weekly = a.repeat === "weekly"; if (await created("plans", {title, date:d, endDate: weekly ? "" : endDate, time:String(a.time||""), note:String(a.note||""), ...(weekly ? {repeat:"weekly"} : {}), createdAt:Date.now()})) done.push(weekly ? `Every ${fmt(d,{weekday:"long"})}: ${title}` : `${fmt(d,{weekday:"short",month:"short",day:"numeric"})}: ${title}`); }
       else if (a.type === "remove_plan") { const p = fuzzy(S.plans, a.match, "title"); if (!p) { skipped.push(`Couldn't find plan "${a.match}"`); continue; } if (await removed("plans", p)) done.push(`Removed ${p.title}`); }
       else if (a.type === "clear_dinner") { const d = String(a.date||""), cur = S.dinners[d]; if (cur) { await removed("dinners", {id:d, ...cur}); done.push(`Cleared ${fmt(d,{weekday:"short"})}`); } else skipped.push("Nothing planned that night"); }
       else if (a.type === "add_task") { const e = eventOf(a.event) || nextEvent(); if (!e) { skipped.push("No event for that to-do"); continue; } const title = String(a.title||"").trim(); if (!title) continue;
@@ -1063,7 +1072,7 @@ document.addEventListener("submit", async e => {
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
   if (f === "dayadd" && v("#da-text") && U.add) { const d = e.target.dataset.date, text = v("#da-text"), tm = v("#da-time"), k = U.add.kind;
     if (k === "dinner") { const cur = S.dinners[d] || {}; await w("dinners", d, {...cur, title:text, recipe:recipeFor(text), note:cur.note || "", time:cur.time || "", link:cur.link || ""}, "set"); }
-    else if (k === "plan") await add("plans", {title:text, date:d, endDate:"", time:tm, note:"", createdAt:Date.now()});
+    else if (k === "plan") await add("plans", {title:text, date:d, endDate:"", time:tm, note:"", ...($("#da-weekly") && $("#da-weekly").checked ? {repeat:"weekly"} : {}), createdAt:Date.now()});
     else await add("tasks", {eventId:v("#da-ev"), title:text, date:d, time:tm, t:to24(tm), cat:v("#da-cat") || "house", detail:"", recipe:recipeFor(text), who:U.add.who || "", done:false});
     toast(`Added to ${daysTo(d)===0 ? "today" : daysTo(d)===1 ? "tomorrow" : fmt(d,{weekday:"long"})}`); U.add = null; $("#overlay").innerHTML = ""; render(); return; }
   if (f === "taskedit" && v("#et-title")) { const tm = v("#et-time"), d = {title:v("#et-title"), detail:v("#et-detail"), date:v("#et-date"), time:tm, t:to24(tm), cat:v("#et-cat"), who:(U.edit && U.edit.who) || ""}; if ($("#et-ev")) d.eventId = v("#et-ev");
