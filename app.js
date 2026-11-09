@@ -8,7 +8,7 @@ const CB = window.COOKBOOK || {recipes:{}, timing:{}, flex:{}, category:{}};
 const R = CB.recipes, TIMING = CB.timing, FLEX = CB.flex, RCAT = CB.category;
 const COURSES = ["Breakfast","Appetizers","Dinner","Sides","Dessert","Drinks","Other"];
 const HTABS = [["plan","Checklist"],["menu","Menu"],["day","Day-of"],["shop","Shop"],["guests","Guests"],["rooms","Rooms"]];
-const CATS = [["invites","Invites"],["reservations","Reservations"],["rooms","Rooms"],["house","House"],["food","Food"]];
+const CATS = [["invites","Invites"],["reservations","Reservations"],["rooms","Rooms"],["house","House"],["food","Food"],["freezer","Freezer"]];
 const ROOM_ITEMS = ["Fresh sheets","Towels","Extra blanket","Chocolate on the pillow"];
 const WK_NAMES = {thanksgiving:"Thanksgiving", christmas:"Christmas"};
 const VIEWS = [["today","Today"],["lists","Lists"],["dinners","Dinners"],["hosting","Hosting"],["cookbook","Cookbook"]];
@@ -16,7 +16,7 @@ const RCATS = ["Breakfast","Appetizers","Mains","Sides","Desserts","Drinks","For
 const LIST_ALIASES = {grocery:["grocery","groceries","store","supermarket","food shop","shopping"], costco:["costco","bulk","warehouse"], todo:["to-do","todo","to do","tasks","errands","list"], ideas:["ideas","meal ideas","dinner ideas","meals","dinners"]};
 
 const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], checks:{}, dinners:{}, shared:{}};
-const U = {view:"today", wk:null, sub:"all", htab:"plan", catF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All", ideaTags:[]};
+const U = {view:"today", wk:null, sub:"all", htab:"plan", catF:"all", hlF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All", ideaTags:[]};
 let db = null, sample = null, ready = false, noDb = false, seen = 0;
 const ls = {get:(k) => { try { return localStorage.getItem(k); } catch(e) { return null; } }, set:(k,v) => { try { localStorage.setItem(k,v); } catch(e) {} }};
 U.view = ["today","lists","dinners","hosting","cookbook","plans"].includes(ls.get("hph_view")) ? ls.get("hph_view") : "today";
@@ -87,6 +87,13 @@ const evById = id => S.events.find(e => e.id === id);
 const wkName = () => WK_NAMES[U.wk] || (wkEvs()[0]||{}).name || "";
 const byOther = x => !!(x.who && !/^(me|i|hailey|you|us|we)$/i.test(x.who.trim()));
 const nextEvent = () => S.events.filter(e => daysTo(e.date) >= 0).sort(byDate)[0] || S.events.slice().sort(byDate).pop();
+/* Hosting to-dos also live on the Lists page, one list per upcoming holiday weekend, with ids like "_host:thanksgiving". */
+const HOST = "_host:";
+const hostWks = () => weekends().filter(x => daysTo(x.evs[x.evs.length-1].date) >= 0);
+const hostName = k => WK_NAMES[k] || ((weekends().find(x => x.k === k) || {evs:[{}]}).evs[0].name) || "Hosting";
+const hostTasks = k => { const ids = S.events.filter(e => wkKey(e) === k).map(e => e.id); return S.tasks.filter(t => ids.includes(t.eventId)); };
+const byDay = (a,b) => byDate(a,b) || (a.t||"99").localeCompare(b.t||"99") || (a.title||"").localeCompare(b.title||"");
+const dayTag = d => { const n = daysTo(d); return n < 0 ? "Overdue" : n === 0 ? "Today" : n === 1 ? "Tomorrow" : `in ${n} days`; };
 const hk = t => { let h = 5381; for (const ch of t) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0; return h.toString(36); };
 const ck = (on, act, id, label) => `<button class="ck" role="checkbox" aria-checked="${!!on}" aria-label="${esc(label)}" data-act="${act}" data-id="${esc(id)}">${on ? CHECK : ""}</button>`;
 const del = (col, id) => `<button class="x ${U.armed===col+id ? "arm" : ""}" data-act="del" data-col="${col}" data-id="${esc(id)}" aria-label="Remove">${U.armed===col+id ? "Remove" : "×"}</button>`;
@@ -158,22 +165,25 @@ function vToday(){
     : `<p class="eyebrow">Tonight</p><div class="big" style="color:var(--faint)">Nothing planned yet</div><div class="inline"><button class="btn sm" data-act="editdinner" data-id="${t}">Plan dinner</button></div>`;
   const strip = `<div class="weekstrip">${[0,1,2,3,4,5,6].map(i => { const d = addDays(ws,i), m = S.dinners[d]; return `<button class="${d===t?"now":""}" data-act="editdinner" data-id="${d}"><b>${fmt(d,{weekday:"short"})}</b><span>${m && m.title ? esc(m.title) : "–"}</span></button>`; }).join("")}</div>`;
   const lists = sortedLists();
-  const lcards = lists.length ? `<div class="grid c4">${lists.slice(0,8).map(l => { const o = openItems(l.id); return `<button class="lcard" data-act="golist" data-id="${l.id}"><p class="eyebrow">${esc(l.name)}</p><div class="big ${o.length?"":"faint"}" ${o.length?"":'style="color:var(--faint)"'}>${o.length}</div><div class="peek">${o.length ? esc(o.slice(0,3).map(i => i.text).join(" · ")) : "All clear"}</div></button>`; }).join("")}</div>` : `<div class="empty"><b>No lists yet</b>Open Lists to make the first one, or say "add milk to grocery".</div>`;
+  const hcards = hostWks().slice(0,1).map(x => { const o = hostTasks(x.k).filter(t => !t.done).sort(byDay), wkO = o.filter(t => t.date && daysTo(t.date) <= 7);
+    return `<button class="lcard host" data-act="golist" data-id="${HOST}${x.k}"><p class="eyebrow">${esc(hostName(x.k))} to-dos</p><div class="big ${o.length?"":"faint"}">${wkO.length}<small>this week</small></div><div class="peek">${o.length ? esc(o.slice(0,3).map(t => t.title).join(" · ")) : "All clear"}</div></button>`; }).join("");
+  const lcards = lists.length || hcards ? `<div class="grid c4">${hcards}${lists.slice(0, hcards ? 7 : 8).map(l => { const o = openItems(l.id); return `<button class="lcard" data-act="golist" data-id="${l.id}"><p class="eyebrow">${esc(l.name)}</p><div class="big ${o.length?"":"faint"}" ${o.length?"":'style="color:var(--faint)"'}>${o.length}</div><div class="peek">${o.length ? esc(o.slice(0,3).map(i => i.text).join(" · ")) : "All clear"}</div></button>`; }).join("")}</div>` : `<div class="empty"><b>No lists yet</b>Open Lists to make the first one, or say "add milk to grocery".</div>`;
   const ev = nextEvent(); let host = `<div class="empty"><b>No events planned</b>Open Hosting to add the first one.</div>`;
   if (ev) { const evs = S.events.filter(e => wkKey(e) === wkKey(ev)), ids = evs.map(e => e.id), tasks = S.tasks.filter(x => ids.includes(x.eventId)), done = tasks.filter(x => x.done).length, g = S.guests.filter(x => x.eventId === ev.id), yes = g.filter(x => x.rsvp === "yes").length, n = daysTo(ev.date);
     host = `<button class="card tap" data-act="gohost" data-id="${wkKey(ev)}"><div class="host-card"><div><p class="eyebrow">Up next</p><div class="name">${esc(ev.name)}</div><div class="when">${fmt(ev.date,{weekday:"long",month:"long",day:"numeric"})}${ev.time ? " · " + esc(ev.time) : ""}</div>${ev.theme ? `<div class="sum-th">${esc(ev.theme)}</div>` : ""}</div><div class="count"><b>${n < 0 ? "Done" : n}</b><span>${n < 0 ? "" : n === 1 ? "day to go" : "days to go"}</span></div></div>
       <div class="stats"><span><b>${done}/${tasks.length}</b> to-dos done</span><span><b>${yes}/${g.length}</b> guests confirmed</span></div><div class="bar"><i style="width:${tasks.length ? Math.round(done/tasks.length*100) : 0}%"></i></div></button>`; }
-  const due = S.tasks.filter(x => !x.done && x.date && daysTo(x.date) <= 7).sort((a,b) => byDate(a,b) || (a.t||"99").localeCompare(b.t||"99")).slice(0,8);
-  const dueHtml = due.length ? `<div class="card soft"><div class="list">${due.map(x => { const d = daysTo(x.date), e = evById(x.eventId); return `<div class="row ${d<0?"overdue":""}">${ck(false,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div><div class="s">${d<0?"Overdue · ":d===0?"Today · ":d===1?"Tomorrow · ":""}${fmt(x.date)}${e ? " · " + esc(e.short||e.name) : ""}${x.detail ? " · " + esc(x.detail) : ""}</div></div></div>`; }).join("")}</div></div>` : "";
+  const allDue = S.tasks.filter(x => !x.done && x.date && daysTo(x.date) <= 7).sort(byDay), due = allDue.slice(0,8), hw = hostWks()[0];
+  const dueHtml = due.length ? `<div class="card soft"><div class="list">${due.map(x => { const d = daysTo(x.date), e = evById(x.eventId); return `<div class="row ${d<0?"overdue":""}">${ck(false,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div><div class="s">${d<0?"Overdue · ":d===0?"Today · ":d===1?"Tomorrow · ":""}${fmt(x.date)}${x.time ? " · " + esc(x.time) : ""}${e ? " · " + esc(e.short||e.name) : ""}</div>${x.cat === "freezer" ? `<span class="pill cat-freezer">Freezer</span>` : ""}</div></div>`; }).join("")}</div>
+    ${hw ? `<div class="inline" style="margin-top:6px"><button class="btn sm ghost" data-act="golist" data-id="${HOST}${hw.k}">${allDue.length > due.length ? `See all ${allDue.length}` : `All ${esc(hostName(hw.k))} to-dos`}</button></div>` : ""}</div>` : "";
   const soon = S.plans.filter(p => p.date && daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14).sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
   const coming = `<div class="card soft">${soon.length ? `<div class="list">${soon.map(p => planRow(p)).join("")}</div>` : `<div class="empty" style="padding:12px 4px"><b>Nothing on the horizon</b>Trips, appointments, nights out. Add one below or say "New York next Sunday".</div>`}
     <form class="add" data-form="plan" style="margin-top:10px"><input type="text" id="np" placeholder="e.g. New York for the day" required><input type="date" id="npd" value="${t}"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button><button class="btn quiet" type="button" data-act="view" data-id="plans">All plans</button></form></div>`;
   return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div>${wxCard()}</div>
     <div class="widgets">${calCard()}${habitsCard()}</div>
     <div class="today-grid"><div class="card dinner-hero">${hero}${strip}</div>${host}</div>
-    <h2 class="eyebrow">Coming up</h2>${coming}
+    ${due.length ? `<h2 class="eyebrow">Hosting to-dos this week</h2>${dueHtml}` : ""}
     <h2 class="eyebrow">Lists</h2>${lcards}
-    ${due.length ? `<h2 class="eyebrow">Hosting to-dos this week</h2>${dueHtml}` : ""}`;
+    <h2 class="eyebrow">Coming up</h2>${coming}`;
 }
 
 /* ───────────────────────── Weather (AccuWeather connector, Philadelphia) ───────────────────────── */
@@ -348,10 +358,13 @@ function vPlans(){
 
 /* ───────────────────────── Lists ───────────────────────── */
 function vLists(){
-  const lists = sortedLists();
-  if (!lists.find(l => l.id === U.listId)) U.listId = lists[0] ? lists[0].id : null;
-  const index = `<div class="list-index">${lists.map(l => `<button aria-pressed="${l.id===U.listId}" data-act="list" data-id="${l.id}">${esc(l.name)}<span class="n">${openItems(l.id).length || ""}</span></button>`).join("")}
+  const lists = sortedLists(), hws = hostWks();
+  const isHost = String(U.listId||"").startsWith(HOST) && hws.some(x => HOST + x.k === U.listId);
+  if (!isHost && !lists.find(l => l.id === U.listId)) U.listId = hws[0] ? HOST + hws[0].k : lists[0] ? lists[0].id : null;
+  const index = `<div class="list-index">${hws.map(x => `<button class="host" aria-pressed="${HOST+x.k===U.listId}" data-act="list" data-id="${HOST}${x.k}">${svg("hosting")}${esc(hostName(x.k))}<span class="n">${hostTasks(x.k).filter(t => !t.done).length || ""}</span></button>`).join("")}${hws.length ? `<div class="sep" aria-hidden="true"></div>` : ""}${lists.map(l => `<button aria-pressed="${l.id===U.listId}" data-act="list" data-id="${l.id}">${esc(l.name)}<span class="n">${openItems(l.id).length || ""}</span></button>`).join("")}
     <form class="newlist" data-form="list"><input type="text" id="nl" placeholder="New list…" aria-label="New list name"></form></div>`;
+  const head = `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done).length} open across ${lists.length} lists</div></div>`;
+  if (String(U.listId||"").startsWith(HOST)) return `${head}<div class="lists-layout">${index}<div>${vHostList(U.listId.slice(HOST.length))}</div></div>`;
   if (!U.listId) return `<div class="ph"><h1>Lists</h1></div><div class="lists-layout">${index}<div class="empty"><b>Make your first list</b>Grocery, Costco, to-do, anything. Type a name on the left.</div></div>`;
   const L = S.lists.find(l => l.id === U.listId), items = listItems(L.id), isIdeas = L.id === "ideas" || /idea/i.test(L.name);
   const allOpen = items.filter(i => !i.done), open = isIdeas ? allOpen.filter(ideaMatches) : allOpen, done = items.filter(i => i.done);
@@ -368,6 +381,33 @@ function vLists(){
     <div class="card soft">${open.length ? `<div class="list">${open.map(row).join("")}</div>` : `<div class="empty"><b>${isIdeas ? (allOpen.length ? "Nothing matches those filters" : "No ideas saved") : "All clear"}</b>${isIdeas ? (allOpen.length ? "Tap All to clear them." : "Jot down dinners you want to make. Plan one into the week with a tap.") : "Add something above, or say it out loud."}</div>`}</div>
     ${done.length ? `<details class="checked" ${U.editList?"open":""}><summary>Checked off (${done.length})</summary><div class="card soft"><div class="list">${done.map(row).join("")}</div></div></details>` : ""}`;
   return `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done).length} open across ${lists.length} lists</div></div><div class="lists-layout">${index}<div>${main}</div></div>`;
+}
+
+/* A holiday weekend's hosting to-dos as a list: grouped by day, filter by kind, quick add with a date. Same tasks as Hosting > Checklist. */
+function vHostList(k){
+  const wk = weekends().find(x => x.k === k); if (!wk) return `<div class="empty"><b>Nothing planned</b></div>`;
+  const all = hostTasks(k), catLab = Object.fromEntries(CATS), f = U.hlF || "all", inF = x => f === "all" || (x.cat||"food") === f;
+  const open = all.filter(x => !x.done && inF(x)).sort(byDay), done = all.filter(x => x.done && inF(x)).sort((a,b) => byDay(b,a));
+  const left = c => all.filter(x => !x.done && (c === "all" || (x.cat||"food") === c)).length;
+  const first = wk.evs[0], last = wk.evs[wk.evs.length-1], n = daysTo(first.date), multi = wk.evs.length > 1, t = todayISO();
+  const row = x => { const e = evById(x.eventId), od = !x.done && x.date && x.date < t;
+    return `<div class="sw" data-col="tasks" data-id="${x.id}"><div class="row ${x.done?"done":""} ${od?"overdue":""}">${ck(x.done,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div>${x.detail ? `<div class="s">${esc(x.detail)}</div>` : ""}
+      <div><span class="pill cat-${x.cat||"food"}">${catLab[x.cat||"food"] || "Food"}</span>${multi && e && (e.short||e.name) !== hostName(k) ? `<span class="pill">${esc(e.short||e.name)}</span>` : ""}${x.recipe && R[x.recipe] ? `<button class="pill link" data-act="recipe" data-id="${x.recipe}">Recipe</button>` : ""}${x.done && x.date ? `<span class="pill">${fmt(x.date)}</span>` : ""}</div></div>${x.time ? `<span class="time">${esc(x.time)}</span>` : ""}</div><button class="sw-del" data-act="swdel" data-col="tasks" data-id="${x.id}" tabindex="-1">Delete</button></div>`; };
+  let groups = "", cur = null;
+  open.forEach(x => { const key = x.date && x.date < t ? "overdue" : (x.date || "");
+    if (key !== cur) { if (cur !== null) groups += `</div></div>`; cur = key;
+      groups += key === "overdue" ? `<div class="day past">Overdue<small class="now">Catch up</small></div><div class="card soft"><div class="list">`
+        : `<div class="day">${key ? fmt(key,{weekday:"long",month:"short",day:"numeric"}) : "No date"}<small class="${daysTo(key)===0?"now":daysTo(key)<=7?"soon":""}">${key ? dayTag(key) : ""}</small></div><div class="card soft"><div class="list">`; }
+    groups += row(x); });
+  if (cur !== null) groups += `</div></div>`;
+  const chips = `<div class="chips" style="margin-top:4px">${[["all","All"], ...CATS].filter(([c]) => c === "all" || c === f || left(c)).map(([c,l]) => `<button class="chip" aria-pressed="${f===c}" data-act="hlf" data-id="${c}">${l} <span>${left(c)}</span></button>`).join("")}</div>`;
+  const defDate = t < first.date ? t : first.date;
+  return `<div class="lhead"><h2>${esc(hostName(k))} to-dos</h2><div class="tools"><button class="btn sm ghost" data-act="gohost" data-id="${k}">Menu, rooms &amp; day-of</button></div></div>
+    <p class="note" style="margin:0 0 6px">${first.date === last.date ? fmt(first.date,{weekday:"long",month:"long",day:"numeric"}) : `${fmt(first.date)} – ${fmt(last.date)}`}${n > 0 ? ` · ${n} day${n===1?"":"s"} to go` : ""}</p>
+    <form class="quickadd host-add" data-form="htask" data-wk="${k}"><input type="text" id="nht" placeholder="Add a hosting to-do…" aria-label="New hosting to-do" autocomplete="off"><input type="date" id="nhtd" value="${defDate}" aria-label="Day"><select id="nhtc" aria-label="Kind">${CATS.map(([c,l]) => `<option value="${c}" ${(f===c || (f==="all" && c==="house"))?"selected":""}>${l}</option>`).join("")}</select><button class="rbtn primary" aria-label="Add">${svg("plus")}</button></form>
+    ${chips}
+    ${groups || `<div class="card soft"><div class="empty"><b>${f === "all" ? "All done" : "Nothing left here"}</b>${f === "all" ? "Every to-do for the weekend is checked off." : "Tap All to see the rest."}</div></div>`}
+    ${done.length ? `<details class="checked"><summary>Checked off (${done.length})</summary><div class="card soft"><div class="list">${done.map(row).join("")}</div></div></details>` : ""}`;
 }
 
 /* ───────────────────────── Dinners ───────────────────────── */
@@ -682,7 +722,7 @@ Rules:
 - "Tonight" is today. A weekday name means the next such day from today (today if it is that day); "next Sunday" after a weekday name means the one after this coming one only when the note says "next week". "What's for dinner" style notes are set_dinner. When the dinner matches a cookbook title, put its key in "recipe". A time estimate mentioned ("takes 30 minutes") goes in "time".
 - Things happening on a date that are not to-dos (a trip, an appointment, a night out, a visitor, a game) are add_plan. A to-do is something to get done; a plan is somewhere to be.
 - Dinner ideas without a date ("idea: lemon chicken", "I want to make tacos sometime") are add_items on Meal ideas; a duration that was said ("takes 30 minutes") goes in the item's "time", and descriptors like crockpot, sheet pan, kid friendly, date night go in "tags".
-- cat is one of invites, reservations, rooms, house, food. course is one of Breakfast, Appetizers, Dinner, Sides, Dessert, Drinks, Other. status is yes, no or maybe. For rsvp, leave event empty to update that guest on every event of their weekend.
+- cat is one of invites, reservations, rooms, house, food, freezer (freezer = take something out of the freezer to thaw). course is one of Breakfast, Appetizers, Dinner, Sides, Dessert, Drinks, Other. status is yes, no or maybe. For rsvp, leave event empty to update that guest on every event of their weekend.
 - Hosting notes go to the event the note is about. If a holiday is named but not an event, use the main dinner event of that weekend. If a to-do has no date, use a sensible date before the event.
 - Split a note with several things into several actions. Keep item text short, like a list entry. Don't invent items. Don't repeat an action that already exists in the data (for example an item already on the list).
 - If the note is a question or nothing can be done, return an empty actions array and answer briefly in "reply".`;
@@ -791,6 +831,7 @@ document.addEventListener("click", async ev => {
     case "sub": U.sub = id; break;
     case "htab": U.htab = id; ls.set("hph_htab", id); break;
     case "cat": U.catF = id; break;
+    case "hlf": U.hlF = id; break;
     case "dayev": U.dayEv = id; break;
     case "task": { const x = S.tasks.find(t => t.id === id); if (x) w("tasks", id, {done:!x.done}); break; }
     case "dish": { const x = S.dishes.find(t => t.id === id); if (x) w("dishes", id, {ready:!x.ready}); break; }
@@ -837,6 +878,10 @@ document.addEventListener("submit", async e => {
   if (f === "list" && v("#nl")) { const name = v("#nl"); const id = await add("lists", {name, order:S.lists.length, createdAt:Date.now()}); if (id) { U.listId = id; ls.set("hph_list", id); } }
   if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe: recipe || recipeFor(title), note:v("#dn-note"), time:v("#dn-time"), link:v("#dn-link")}, "set"); U.editDinner = null; toast("Saved"); }
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
+  if (f === "htask" && v("#nht")) { const k = e.target.dataset.wk, evs = S.events.filter(x => wkKey(x) === k).sort(byDate), d = v("#nhtd") || todayISO();
+    const ev = evs.find(x => x.date >= d) || evs[evs.length-1];
+    if (ev) { await add("tasks", {eventId:ev.id, title:v("#nht"), date:d, time:"", t:"", cat:v("#nhtc") || "house", detail:"", recipe:recipeFor(v("#nht")), done:false}); toast(`Added for ${fmt(d,{weekday:"long"})}`); }
+    $("#nht").value = ""; render(); const q = $("#nht"); if (q) q.focus(); return; }
   if (f === "guest" && v("#ng")) add("guests", {eventId:v("#nge"), name:v("#ng"), diet:v("#ngd"), rsvp:"maybe"});
   if (f === "extra" && v("#ne")) add("extras", {eventId:v("#nee"), item:v("#ne"), done:false});
   if (f === "room" && v("#nr")) add("rooms", {weekend:U.wk, name:v("#nr"), order:Date.now()%1e7, items:{}});

@@ -117,7 +117,8 @@ a.pill{text-decoration:none}a.pill.ext:hover{text-decoration:underline;text-unde
 .nightpick .chip span{color:var(--muted);margin-left:4px;font-weight:400}
 a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .cat-invites{background:var(--gold-soft);color:var(--gold)}.cat-reservations{background:var(--berry-soft);color:var(--berry)}
-.cat-rooms{background:var(--blue-soft);color:var(--blue)}.cat-house{background:var(--chip);color:var(--muted)}.cat-food{background:var(--green-soft);color:var(--green)}
+.cat-rooms{background:var(--clay-soft);color:var(--clay)}.cat-house{background:var(--chip);color:var(--muted)}.cat-food{background:var(--green-soft);color:var(--green)}
+.cat-freezer{background:var(--blue-soft);color:var(--blue)}
 .row.overdue .t{color:var(--warn)}
 .sw{position:relative;overflow:hidden;touch-action:pan-y;border-bottom:1px solid var(--line)}
 .sw:last-child{border-bottom:0}
@@ -234,6 +235,16 @@ textarea{resize:vertical;line-height:1.4}
 .list-index button[aria-pressed="true"]{background:var(--raised);color:var(--ink);box-shadow:var(--shadow)}
 .list-index button .n{margin-left:auto;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
 .list-index .newlist{margin-top:8px}
+.list-index button.host{color:var(--clay)}
+.list-index button.host svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.list-index button.host[aria-pressed="true"]{color:var(--ink)}
+.list-index button.host[aria-pressed="true"] svg{color:var(--clay)}
+.list-index .sep{height:1px;background:var(--line);margin:6px 16px}
+.lcard.host{background:var(--clay-soft)}
+.lcard.host .eyebrow{color:var(--clay)}
+.lcard .big small{font:500 13px var(--sans);color:var(--muted);margin-left:8px;letter-spacing:0}
+.host-add input[type=date]{flex:0 1 170px}
+.host-add select{flex:0 1 140px}
 .list-index .newlist input{width:100%}
 .lhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .lhead h2{margin:0;font-family:var(--display);font-weight:500;font-size:34px;line-height:1}
@@ -388,6 +399,13 @@ details.cook summary{cursor:pointer;font-weight:500;color:var(--green);padding:8
   .list-index button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink);box-shadow:none}
   .list-index button .n{margin-left:4px}
   .list-index .newlist{margin:0;flex:0 0 160px}
+  .list-index .sep{display:none}
+  .list-index button.host{border-color:var(--clay-soft);background:var(--clay-soft)}
+  .list-index button.host[aria-pressed="true"]{background:var(--clay);border-color:var(--clay);color:#fff}
+  .list-index button.host[aria-pressed="true"] svg{color:#fff}
+  .host-add{flex-wrap:wrap}
+  .host-add input[type=text]{flex:1 1 100%}
+  .host-add input[type=date],.host-add select{flex:1 1 0}
   .week{grid-template-columns:repeat(2,minmax(0,1fr))}
   .weekstrip button span{display:none}
   .cook-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
