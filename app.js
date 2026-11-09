@@ -151,6 +151,7 @@ function addSheet(d, kind, hostDefault){
       <label>${k === "dinner" ? "What's for dinner?" : k === "plan" ? "What's happening?" : "What needs doing?"}<input type="text" id="da-text" required autocomplete="off" placeholder="${k === "dinner" ? "e.g. Tacos" : k === "plan" ? "e.g. Haircut" : "e.g. Pick up the tablecloths"}" ${k === "dinner" && S.dinners[d] && S.dinners[d].title ? `value="${esc(S.dinners[d].title)}"` : ""}></label>
       ${k !== "dinner" ? `<div class="erow"><label>Time<input type="text" id="da-time" placeholder="Optional, e.g. 3:00 PM"></label>${k === "todo" ? `<label>For<select id="da-ev"><option value="">The house (no event)</option>${(wk ? wk.evs : []).map(e => `<option value="${e.id}" ${U.add.ev===e.id?"selected":""}>${esc(e.short || e.name)}</option>`).join("")}</select></label><label>Kind<select id="da-cat">${CATS.map(([c,l]) => `<option value="${c}" ${c==="house"?"selected":""}>${l}</option>`).join("")}</select></label>` : ""}</div>` : ""}
       ${k === "plan" ? `<label class="chk"><input type="checkbox" id="da-weekly"> Every ${fmt(d,{weekday:"long"})}</label>` : ""}
+      ${k === "dinner" ? (() => { const L = S.lists.find(isIdeasList), ideas = L ? openItems(L.id).slice().sort((a,b) => (minutesOf(a.time) ?? 999) - (minutesOf(b.time) ?? 999) || a.text.localeCompare(b.text)) : []; return ideas.length ? `<p class="eyebrow" style="margin:6px 0 0">Or pick from your ideas</p><div class="ipicks">${ideas.map(i => `<button type="button" class="ipick" data-act="ideanight" data-id="${d}" data-idea="${i.id}">${esc(i.text)}${i.time ? `<span>${esc(shortTime(i.time))}</span>` : ""}</button>`).join("")}</div>` : ""; })() : ""}
       ${k === "todo" ? whoPick(U.add.who) : ""}
       <div class="inline eacts"><button class="btn">Add</button><button type="button" class="btn quiet" data-act="close">Cancel</button></div>
     </form></div></div>`;
@@ -506,6 +507,12 @@ function vHostList(k){
 
 /* ───────────────────────── Meals: the week's dinners and the cookbook, one tab ───────────────────────── */
 /* Meal ideas as cards with filter rows (time, protein, method, type). Tap a card for the recipe and a night to put it on. */
+async function ideaToDinner(idea, d){ if (!idea) return; const cur = S.dinners[d] || {}, title = idea.text, rk = idea.recipe && R[idea.recipe] ? idea.recipe : recipeFor(title);
+  await w("dinners", d, {...cur, title, recipe: rk, note: cur.note || "", time: idea.time || "", link: idea.link || "", ingredients: idea.ingredients || [], steps: idea.steps || [], servings: idea.servings || ""}, "set");
+  toast(`${title} on ${daysTo(d)===0 ? "tonight" : fmt(d,{weekday:"long"})}`); }
+function ideaNights(id){ const i = S.items.find(x => x.id === id); if (!i) return; const t = todayISO();
+  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel edit-panel" role="dialog" aria-modal="true" aria-label="Pick a night"><div class="top-actions"><button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>${esc(i.text)}</h3><p class="note" style="font-size:14px;margin-top:6px">Which night?</p>
+    <div class="nightlist">${[0,1,2,3,4,5,6,7,8,9,10,11,12,13].map(n => { const d = addDays(t, n), m = S.dinners[d]; return `<button class="night ${m && m.title ? "has" : ""}" data-act="ideanight" data-id="${d}" data-idea="${i.id}"><b>${n===0?"Tonight":n===1?"Tomorrow":fmt(d,{weekday:"long"})}</b><span>${fmt(d,{month:"short",day:"numeric"})}${m && m.title ? " · replaces " + esc(m.title) : ""}</span></button>`; }).join("")}</div></div></div>`; }
 const PROT_CLS = {chicken:"gold", beef:"clay", pork:"berry", seafood:"blue", veg:"green"};
 function ideasGrid(L, all, days){
   const F = U.ideaF || (U.ideaF = {}), match = i => { const tg = ideaTags(i); return IGROUPS.every(([g]) => !F[g] || tg.includes(F[g])); };
@@ -516,9 +523,9 @@ function ideasGrid(L, all, days){
   const card = i => { const rk = i.recipe && R[i.recipe] ? i.recipe : recipeFor(i.text), tg = ideaTags(i), tm = shortTime(i.time, rk), prot = ["chicken","beef","pork","seafood","veg"].find(k => tg.includes(k));
     const n = (i.ingredients || (rk && R[rk] && R[rk].ingredients) || []).filter(x => !/^##|^pantry:/i.test(x)).length;
     const meth = ["crockpot","sheetpan","onepot","instantpot","airfryer","grill"].filter(k => tg.includes(k)).map(k => TAG_LABEL[k]);
-    return `<button class="icard ${prot ? "p-" + PROT_CLS[prot] : ""}" data-act="idearecipe" data-id="${i.id}"><span class="itop">${prot ? `<span class="iprot">${TAG_LABEL[prot]}</span>` : ""}${tg.includes("few") ? `<span class="ifew">5 ingredients</span>` : ""}</span><b>${esc(i.text)}</b><span class="imeta">${[tm, ...meth, n ? n + " ingredients" : "", safeUrl(i.link) && !hasContent(i) ? linkLabel(i.link) : ""].filter(Boolean).map(esc).join(" · ")}</span></button>`; };
+    return `<div class="icard ${prot ? "p-" + PROT_CLS[prot] : ""}" data-act="idearecipe" data-id="${i.id}" data-drag="idea" data-drag-id="${i.id}" data-drag-from="" role="button" tabindex="0"><button class="iplus" data-act="ideaplus" data-id="${i.id}" aria-label="Put ${esc(i.text)} on a night">${svg("plus")}</button><span class="itop">${prot ? `<span class="iprot">${TAG_LABEL[prot]}</span>` : ""}${tg.includes("few") ? `<span class="ifew">5 ingredients</span>` : ""}</span><b>${esc(i.text)}</b><span class="imeta">${[tm, ...meth, n ? n + " ingredients" : "", safeUrl(i.link) && !hasContent(i) ? linkLabel(i.link) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>`; };
   const pick = U.pickIdea && all.find(i => i.id === U.pickIdea);
-  return `<div class="ideas-panel"><div class="ideas-head"><h2 class="mh">Meal ideas <span>${all.length}</span></h2><div class="inline" style="margin:0">${L && safeUrl(L.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(L.link))}" target="_blank" rel="noopener">${esc(linkLabel(L.link))} board ↗</a>` : ""}<button class="btn sm" data-act="ideaadd">${svg("plus")} Add an idea</button></div></div>
+  return `<div class="ideas-panel"><div class="ideas-head"><h2 class="mh">Meal ideas <span>${all.length}</span></h2><span class="ihint">Tap + to put one on a night, or hold and drag it onto a day</span><div class="inline" style="margin:0">${L && safeUrl(L.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(L.link))}" target="_blank" rel="noopener">${esc(linkLabel(L.link))} board ↗</a>` : ""}<button class="btn sm" data-act="ideaadd">${svg("plus")} Add an idea</button></div></div>
     ${U.ideaAdd ? `<form class="add" data-form="ideanew" style="margin:0 0 12px"><input type="text" id="in-t" placeholder="Dinner idea" required autocomplete="off"><input type="text" id="in-tm" placeholder="Time, e.g. 30 min" style="flex:0 1 150px"><input type="text" id="in-l" placeholder="Link (Pinterest, recipe site)"><button class="btn">Add</button><button type="button" class="btn quiet" data-act="ideaadd">Cancel</button></form>` : ""}
     <div class="ifilters">${rows}</div>
     ${pick ? `<div class="nightpick"><p class="eyebrow">Put ${esc(pick.text)} on which night?</p><div class="daypick">${days.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(pick.text)}">${fmt(d,{weekday:"short",day:"numeric"})}</button>`).join("")}<button class="chip" data-act="plan" data-id="">Cancel</button></div></div>` : ""}
@@ -530,7 +537,7 @@ function vDinners(){
   const range = `${fmt(start,{month:"long",day:"numeric"})} – ${fmt(days[6],{month:pd(start).getMonth()===pd(days[6]).getMonth()?undefined:"long",day:"numeric"})}`;
   const nav = `<div class="weeknav"><span class="range">${U.weekOff===0 ? "This week" : U.weekOff===1 ? "Next week" : U.weekOff===-1 ? "Last week" : "Week of " + fmt(start,{month:"short",day:"numeric"})}<span style="color:var(--muted);font-family:var(--sans);font-size:14px;margin-left:10px">${range}</span></span>
     <button class="rbtn" data-act="week" data-id="-1" aria-label="Previous week">${svg("prev")}</button>${U.weekOff ? `<button class="btn sm ghost" data-act="week" data-id="0">Today</button>` : ""}<button class="rbtn" data-act="week" data-id="1" aria-label="Next week">${svg("next")}</button></div>`;
-  const cards = `<div class="week">${days.map(d => { const m = S.dinners[d] || {}, n = daysTo(d), pl = plansOn(d), tm = shortTime(m.time, m.recipe); return `<button class="daycard ${d===t?"now":""} ${n<0?"past":""} ${U.editDinner===d?"editing":""}" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}"><div class="d">${fmt(d,{weekday:"short"})}<b>${pd(d).getDate()}</b></div>${pl.length ? `<div class="plans">${pl.map(p => `<span class="plan-chip">${esc(p.title)}</span>`).join("")}</div>` : ""}<div class="m ${m.title?"":"none"}">${m.title ? esc(m.title) : "Nothing yet"}</div>${m.note ? `<div class="nt">${esc(m.note)}</div>` : ""}<div class="tag">${timePill(tm)}${m.recipe && R[m.recipe] || hasContent(m) ? `<span class="pill link">Recipe</span>` : safeUrl(m.link) ? `<span class="pill link">${esc(linkLabel(m.link))}</span>` : ""}</div></button>`; }).join("")}</div>`;
+  const cards = `<div class="week">${days.map(d => { const m = S.dinners[d] || {}, n = daysTo(d), pl = plansOn(d), tm = shortTime(m.time, m.recipe); return `<button data-day="${d}" class="daycard ${d===t?"now":""} ${n<0?"past":""} ${U.editDinner===d?"editing":""}" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}"><div class="d">${fmt(d,{weekday:"short"})}<b>${pd(d).getDate()}</b></div>${pl.length ? `<div class="plans">${pl.map(p => `<span class="plan-chip">${esc(p.title)}</span>`).join("")}</div>` : ""}<div class="m ${m.title?"":"none"}">${m.title ? esc(m.title) : "Nothing yet"}</div>${m.note ? `<div class="nt">${esc(m.note)}</div>` : ""}<div class="tag">${timePill(tm)}${m.recipe && R[m.recipe] || hasContent(m) ? `<span class="pill link">Recipe</span>` : safeUrl(m.link) ? `<span class="pill link">${esc(linkLabel(m.link))}</span>` : ""}</div></button>`; }).join("")}</div>`;
   let edit = "";
   if (U.editDinner) { const d = U.editDinner, m = S.dinners[d] || {};
     edit = `<div class="card dinner-edit"><h3>Dinner on ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h3><form class="add" data-form="dinner" data-date="${d}"><input type="text" id="dn-title" value="${esc(m.title||"")}" placeholder="What's for dinner?" autocomplete="off"><select id="dn-recipe" aria-label="Cookbook recipe">${recipeOptions(m.recipe)}</select><input type="text" id="dn-note" value="${esc(m.note||"")}" placeholder="Note (who's cooking, prep, takeout)"><input type="text" id="dn-time" value="${esc(m.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 150px"><input type="text" id="dn-link" value="${esc(m.link||"")}" placeholder="Link (optional)"><button class="btn">Save</button>${m.title ? `<button class="btn ghost" type="button" data-act="cleardinner" data-id="${d}">Clear</button>` : ""}<button class="btn quiet" type="button" data-act="canceldinner">Close</button></form>
@@ -1059,6 +1066,8 @@ document.addEventListener("click", async ev => {
     case "cat": U.catF = id; break;
     case "hlf": U.hlF = id; break;
     case "ifilter": (U.ideaF ||= {})[b.dataset.g] = id; break;
+    case "ideaplus": ideaNights(id); return;
+    case "ideanight": { const idea = S.items.find(i => i.id === b.dataset.idea); $("#overlay").innerHTML = ""; await ideaToDinner(idea, id); break; }
     case "ideaadd": U.ideaAdd = !U.ideaAdd; render(); { const i = $("#in-t"); if (i) i.focus(); } return;
     case "calmode": U.calMode = id; U.calOff = 0; break;
     case "caloff": U.calOff = id === "0" ? 0 : U.calOff + (+id); if (id === "0") U.calSel = null; break;
@@ -1147,7 +1156,7 @@ document.addEventListener("submit", async e => {
    Touch waits 320ms without moving before it lifts, so ordinary scrolling is untouched. While dragging, the page scrolls near its edges. */
 let DG = null, dgJust = 0;
 const dgClear = () => document.querySelectorAll(".drop-over").forEach(e => e.classList.remove("drop-over"));
-function dgStart(target, x, y, mouse){ if (U.view !== "cal" || !target.closest) return; const el = target.closest("[data-drag]"); if (!el || target.closest(".ck")) return;
+function dgStart(target, x, y, mouse){ if (!["cal","dinners"].includes(U.view) || !target.closest || $("#overlay").innerHTML) return; const el = target.closest("[data-drag]"); if (!el || target.closest(".ck")) return;
   DG = {el, kind:el.dataset.drag, id:el.dataset.dragId, from:el.dataset.dragFrom, x0:x, y0:y, x, y, mouse, active:false};
   if (!mouse) DG.timer = setTimeout(() => dgActivate(), 320); }
 function dgActivate(){ if (!DG || DG.active) return; const d = DG, r = d.el.getBoundingClientRect(); d.active = true;
@@ -1166,6 +1175,7 @@ function dgMove(x, y){ const d = DG; if (!d) return false; d.x = x; d.y = y;
 async function dgEnd(){ const d = DG; if (!d) return; clearTimeout(d.timer); DG = null; if (!d.active) return;
   if (d.ghost) d.ghost.remove(); d.el.classList.remove("dg-src"); document.body.classList.remove("dragging"); dgClear(); dgJust = Date.now();
   if (!d.over || d.over === d.from) return;
+  if (d.kind === "idea") { await ideaToDinner(S.items.find(i => i.id === d.id), d.over); render(); return; }
   const to = d.over, shift = daysTo(to) - daysTo(d.from);
   if (d.kind === "task") await w("tasks", d.id, {date:to});
   else if (d.kind === "plan") { const p = S.plans.find(x => x.id === d.id); if (!p) return; await w("plans", d.id, {date:addDays(p.date, shift), endDate: p.endDate ? addDays(p.endDate, shift) : ""}); }
