@@ -35,7 +35,7 @@ Capabilities declared at publish: `db`, `user`, `sample`.
 
 ## Publishing
 
-Publish `index.html` to the artifact URL above with `app.css`, `app.js` and `cookbook.js` as supporting files. Omit `capabilities` to keep the stored declaration.
+Publish `index.html` to the artifact URL above with the three supporting files under versioned names, so a device that cached an older copy loads the new code: bump N in `index.html` (`app.vN.css`, `cookbook.vN.js`, `app.vN.js`) and publish with `files` mapping `app.vN.css` to `app.css`, `app.vN.js` to `app.js` and `cookbook.vN.js` to `cookbook.js`. Omit `capabilities` to keep the stored declaration. The dev harness loads the unversioned files directly.
 
 ## Local development
 
