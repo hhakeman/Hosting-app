@@ -200,7 +200,7 @@ function recipeObj(o, src){ if (!o) return null;
 const recipeFromRef = ref => { const [kind, ...rest] = String(ref||"").split(":"); const id = rest.join(":");
   if (kind === "dinner") return recipeObj(S.dinners[id], ref); if (kind === "item") return recipeObj(S.items.find(i => i.id === id), ref); return R[kind] ? {...R[kind], key:kind, src:"cb:"+kind} : (R[id] ? {...R[id], key:id, src:"cb:"+id} : null); };
 /* Meal idea tags: derived from the recipe's own words and time, plus any tags typed on the idea. */
-const TAGS = [["quick","Under 30 min"],["hour","Under an hour"],["crockpot","Crockpot"],["instantpot","Instant Pot"],["sheetpan","Sheet pan"],["onepot","One pot"],["airfryer","Air fryer"],["grill","Grill"],["chicken","Chicken"],["beef","Beef"],["pork","Pork"],["seafood","Seafood"],["veg","Vegetarian"],["soup","Soup"],["pasta","Pasta"],["tacos","Tacos"],["salad","Salad"],["family","Family cookbook"]];
+const TAGS = [["quick","Under 30 min"],["hour","Under an hour"],["crockpot","Crockpot"],["instantpot","Instant Pot"],["sheetpan","Sheet pan"],["onepot","One pot"],["airfryer","Air fryer"],["grill","Grill"],["chicken","Chicken"],["beef","Beef"],["pork","Pork"],["seafood","Seafood"],["veg","Vegetarian"],["soup","Soup"],["pasta","Pasta"],["tacos","Tacos"],["salad","Salad"],["family","Family cookbook"],["few","5 ingredients"]];
 const TAG_LABEL = Object.fromEntries(TAGS);
 const minutesOf = t => { let total = 0, any = false; const re = /(\d+(?:\.\d+)?)(?:\s*(?:[–-]|to)\s*(\d+(?:\.\d+)?))?\s*(h(?:ou)?rs?|min(?:ute)?s?)/gi; let m;
   while ((m = re.exec(String(t||"")))) { any = true; const n = +(m[2] || m[1]); total += /^h/i.test(m[3]) ? n*60 : n; } return any ? total : null; };
