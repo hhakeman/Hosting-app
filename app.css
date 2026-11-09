@@ -436,6 +436,9 @@ details.cook summary{cursor:pointer;font-weight:500;color:var(--green);padding:8
 .lg.dinner,.ce.dinner,.dsec.dinner{--k:var(--green);--ks:var(--green-soft)}
 .lg.plan,.ce.plan,.dsec.plan{--k:var(--clay);--ks:var(--clay-soft)}
 .lg.host,.ce.host{--k:var(--berry);--ks:var(--berry-soft)}
+.lg.hol,.ce.hol{--k:var(--plum);--ks:var(--plum-soft)}
+.ce.hol{font-weight:500;color:var(--plum);cursor:default}
+.hol-t{color:var(--plum)}
 .lg.todo,.ce.todo,.dsec.todo{--k:var(--gold);--ks:var(--gold-soft)}
 
 .wgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:stretch}

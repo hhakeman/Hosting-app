@@ -246,7 +246,7 @@ function vToday(){
   const soon = S.plans.filter(p => p.date && daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14).sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
   const coming = `<div class="card soft">${soon.length ? `<div class="list">${soon.map(p => planRow(p)).join("")}</div>` : `<div class="empty" style="padding:12px 4px"><b>Nothing on the horizon</b>Trips, appointments, nights out. Add one below or say "New York next Sunday".</div>`}
     <form class="add" data-form="plan" style="margin-top:10px"><input type="text" id="np" placeholder="e.g. New York for the day" required><input type="date" id="npd" value="${t}"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button><button class="btn quiet" type="button" data-act="view" data-id="plans">All plans</button></form></div>`;
-  return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div>${wxCard()}</div>
+  return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${holidayOn(t) ? " · " + esc(holidayOn(t)) : ""}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div>${wxCard()}</div>
     <div class="widgets">${calCard()}</div>
     <div class="today-grid"><div class="card dinner-hero">${hero}${strip}</div>${host}</div>
     ${due.length ? `<h2 class="eyebrow">To-dos this week</h2>${dueHtml}` : ""}
@@ -500,6 +500,14 @@ function vDinners(){
 /* ───────────────────────── Calendar: everything with a date, in one place ─────────────────────────
    Meetings (Outlook), dinners, plans, hosting events and hosting to-dos, by week or month. Tap a day for its detail and one add box.
    Meetings come from the live connector for the visible week when the viewer has it, else from the hourly shared snapshot. */
+/* Holidays, computed for any year: fixed dates, nth-weekday rules, and Easter. */
+const nthDow = (y, m, dow, n) => { if (n > 0) { const off = (dow - new Date(y, m, 1).getDay() + 7) % 7; return iso(new Date(y, m, 1 + off + (n-1)*7)); }
+  const last = new Date(y, m+1, 0), off = (last.getDay() - dow + 7) % 7; return iso(new Date(y, m, last.getDate() - off)); };
+const easter = y => { const a = y % 19, b = Math.floor(y/100), c = y % 100, d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25), g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30, i = Math.floor(c/4), k = c % 4, l = (32+2*e+2*i-h-k) % 7, m = Math.floor((a+11*h+22*l)/451), mo = Math.floor((h+l-7*m+114)/31), da = ((h+l-7*m+114) % 31) + 1; return iso(new Date(y, mo-1, da)); };
+const holidaysFor = y => [[`${y}-01-01`,"New Year's Day"],[nthDow(y,0,1,3),"Martin Luther King Jr. Day"],[`${y}-02-14`,"Valentine's Day"],[nthDow(y,1,1,3),"Presidents' Day"],[`${y}-03-17`,"St. Patrick's Day"],[easter(y),"Easter"],[nthDow(y,4,0,2),"Mother's Day"],[nthDow(y,4,1,-1),"Memorial Day"],[nthDow(y,5,0,3),"Father's Day"],[`${y}-06-19`,"Juneteenth"],[`${y}-07-04`,"Independence Day"],[nthDow(y,8,1,1),"Labor Day"],[nthDow(y,9,1,2),"Indigenous Peoples' Day"],[`${y}-10-31`,"Halloween"],[`${y}-11-11`,"Veterans Day"],[nthDow(y,10,4,4),"Thanksgiving"],[`${y}-12-24`,"Christmas Eve"],[`${y}-12-25`,"Christmas"],[`${y}-12-31`,"New Year's Eve"]];
+const HOL = {};
+const holidayOn = d => { const y = +String(d).slice(0,4); if (!y) return ""; if (!HOL[y]) HOL[y] = Object.fromEntries(holidaysFor(y)); return HOL[y][d] || ""; };
+const CALI_STAR = '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>';
 const CALWK = {key:null, parts:{}, un:[]};
 function calWeekWatch(start){ if (!CAL.mcp || CALWK.key === start) return; CALWK.key = start; CALWK.parts = {};
   CALWK.un.forEach(u => { try { u(); } catch (e) {} });
@@ -513,11 +521,12 @@ const meetingsOn = d => { const part = Object.entries(CALWK.parts).find(([a, p])
 const wxOn = d => { const src = WX.daily || (S.shared.weather && S.shared.weather.daily); const f = src && (src.dailyForecast || []).find(x => String(x.date || "").slice(0,10) === d); return f || null; };
 const evsOn = d => S.events.filter(e => e.date === d);
 const tasksOn = d => S.tasks.filter(x => x.date === d).sort(byDay);
-const CALI = {dinner:'<path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"/>', host:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>', fz:'<path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5"/>'};
+const CALI = {star:CALI_STAR, dinner:'<path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"/>', host:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>', fz:'<path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5"/>'};
 const ci = k => `<svg viewBox="0 0 24 24" aria-hidden="true" class="ci">${CALI[k]}</svg>`;
 
 function dayItems(d, compact){
-  const t = todayISO(), m = S.dinners[d], mt = meetingsOn(d), out = [];
+  const t = todayISO(), m = S.dinners[d], mt = meetingsOn(d), out = [], hol = holidayOn(d);
+  if (hol) out.push(`<div class="ce hol">${ci("star")}${esc(hol)}</div>`);
   plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="view" data-id="plans" title="${esc(p.title)}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
   evsOn(d).forEach(e => out.push(`<button class="ce host" data-act="gohost" data-id="${esc(wkKey(e))}">${ci("host")}${esc(e.short || e.name)}${e.time && !compact ? `<span>${esc(e.time)}</span>` : ""}</button>`));
   if (mt) mt.allDay.forEach(e => out.push(`<div class="ce meet all">${esc(e.subject || "All day")}</div>`));
@@ -532,7 +541,7 @@ function dayItems(d, compact){
 
 function vCal(){
   const t = todayISO();
-  const legend = `<div class="cal-legend"><span class="lg meet">Meetings</span><span class="lg dinner">Dinner</span><span class="lg plan">Plans</span><span class="lg host">Hosting</span><span class="lg todo">To-dos</span></div>`;
+  const legend = `<div class="cal-legend"><span class="lg meet">Meetings</span><span class="lg dinner">Dinner</span><span class="lg plan">Plans</span><span class="lg host">Hosting</span><span class="lg todo">To-dos</span><span class="lg hol">Holidays</span></div>`;
   const modes = `<div class="seg" role="tablist" aria-label="View"><button aria-pressed="${U.calMode==="week"}" data-act="calmode" data-id="week">Week</button><button aria-pressed="${U.calMode==="month"}" data-act="calmode" data-id="month">Month</button></div>`;
   let range, grid;
   if (U.calMode === "month") {
@@ -569,7 +578,7 @@ function calDayPanel(d){
   ].filter(Boolean).join("");
   const kinds = [["plan","Plan"],["dinner","Dinner"], ...(hostWk ? [["task","Hosting to-do"]] : [])];
   const kind = kinds.some(k => k[0] === U.calKind) ? U.calKind : "plan";
-  return `<div class="card dpanel" id="dpanel"><div class="dhead"><div><p class="eyebrow">${d === t ? "Today" : dayTag(d) === "Overdue" ? "Past" : dayTag(d)}</p><h2>${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h2></div><button class="btn sm" data-act="caladd" data-id="${d}">${svg("plus")} Add</button>${w ? `<div class="dwx">${wxSvg(w.day.icon)}<span><b>${w.day.temperature}°</b> / ${w.night.temperature}°<br>${esc(w.day.phrase || "")}</span></div>` : ""}</div>
+  return `<div class="card dpanel" id="dpanel"><div class="dhead"><div><p class="eyebrow">${d === t ? "Today" : dayTag(d) === "Overdue" ? "Past" : dayTag(d)}${holidayOn(d) ? ` · <span class="hol-t">${esc(holidayOn(d))}</span>` : ""}</p><h2>${fmt(d,{weekday:"long",month:"long",day:"numeric"})}</h2></div><button class="btn sm" data-act="caladd" data-id="${d}">${svg("plus")} Add</button>${w ? `<div class="dwx">${wxSvg(w.day.icon)}<span><b>${w.day.temperature}°</b> / ${w.night.temperature}°<br>${esc(w.day.phrase || "")}</span></div>` : ""}</div>
     <div class="dgrid">${parts}</div>
     <form class="add cal-add" data-form="calnew" data-date="${d}" data-wk="${esc(hostWk || "")}"><div class="seg sm" role="tablist" aria-label="Add a">${kinds.map(([k,l]) => `<button type="button" aria-pressed="${kind===k}" data-act="calkind" data-id="${k}">${l}</button>`).join("")}</div><input type="text" id="cnt" placeholder="${kind === "dinner" ? "What's for dinner?" : kind === "task" ? "A hosting to-do for this day" : "A plan for this day"}" aria-label="Add to this day" autocomplete="off"><input type="text" id="cntt" placeholder="Time (optional)" style="flex:0 1 140px" ${kind === "dinner" ? "hidden" : ""}><button class="btn">Add</button></form></div>`;
 }
