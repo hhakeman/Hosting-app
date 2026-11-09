@@ -11,15 +11,16 @@ const HTABS = [["plan","Checklist"],["menu","Menu"],["day","Day-of"],["shop","Sh
 const CATS = [["invites","Invites"],["reservations","Reservations"],["rooms","Rooms"],["house","House"],["food","Food"],["freezer","Freezer"]];
 const ROOM_ITEMS = ["Fresh sheets","Towels","Extra blanket","Chocolate on the pillow"];
 const WK_NAMES = {thanksgiving:"Thanksgiving", christmas:"Christmas"};
-const VIEWS = [["today","Today"],["cal","Calendar"],["lists","Lists"],["dinners","Dinners"],["hosting","Hosting"],["cookbook","Cookbook"]];
+const VIEWS = [["today","Today"],["cal","Calendar"],["lists","Lists"],["meals","Meals"],["hosting","Hosting"]];
 const RCATS = ["Breakfast","Appetizers","Mains","Sides","Desserts","Drinks","For the pups"];
 const LIST_ALIASES = {grocery:["grocery","groceries","store","supermarket","food shop","shopping"], costco:["costco","bulk","warehouse"], todo:["to-do","todo","to do","tasks","errands","list"], ideas:["ideas","meal ideas","dinner ideas","meals","dinners"]};
 
-const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], checks:{}, dinners:{}, shared:{}};
-const U = {view:"today", calMode:"week", calOff:0, calSel:null, calKind:"plan", wk:null, sub:"all", htab:"plan", catF:"all", hlF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All", ideaTags:[]};
+const S = {events:[], dishes:[], guests:[], tasks:[], extras:[], rooms:[], lists:[], items:[], plans:[], people:[], checks:{}, dinners:{}, shared:{}};
+const U = {view:"today", mtab:"dinners", who:"", peopleOpen:false, calMode:"week", calOff:0, calSel:null, calKind:"plan", wk:null, sub:"all", htab:"plan", catF:"all", hlF:"all", listId:null, editList:false, weekOff:0, editDinner:null, pickIdea:null, open:{}, armed:null, dayEv:null, q:"", rcat:"All", ideaTags:[]};
 let db = null, sample = null, ready = false, noDb = false, seen = 0;
 const ls = {get:(k) => { try { return localStorage.getItem(k); } catch(e) { return null; } }, set:(k,v) => { try { localStorage.setItem(k,v); } catch(e) {} }};
 U.view = ["today","cal","lists","dinners","hosting","cookbook","plans"].includes(ls.get("hph_view")) ? ls.get("hph_view") : "today";
+U.mtab = ls.get("hph_mtab") === "cookbook" ? "cookbook" : "dinners"; U.who = ls.get("hph_who") || "";
 U.wk = ls.get("hph_wk"); U.htab = ls.get("hph_htab") || "plan"; U.listId = ls.get("hph_list");
 if (/^#(today|cal|lists|dinners|hosting|cookbook|plans)$/.test(location.hash)) U.view = location.hash.slice(1);
 
@@ -42,6 +43,8 @@ const I = {
   today:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   lists:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
   dinners:'<path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"/>',
+  meals:'<path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"/>',
+  person:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6"/>',
   hosting:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
   cookbook:'<path d="M4 4h7a2 2 0 0 1 2 2v14a1 1 0 0 0-1-1H4zM20 4h-7a2 2 0 0 0-2 2v14a1 1 0 0 1 1-1h8z"/>',
   mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
@@ -94,6 +97,26 @@ const hostWks = () => weekends().filter(x => daysTo(x.evs[x.evs.length-1].date) 
 const hostName = k => WK_NAMES[k] || ((weekends().find(x => x.k === k) || {evs:[{}]}).evs[0].name) || "Hosting";
 const hostTasks = k => { const ids = S.events.filter(e => wkKey(e) === k).map(e => e.id); return S.tasks.filter(t => ids.includes(t.eventId)); };
 const byDay = (a,b) => byDate(a,b) || (a.t||"99").localeCompare(b.t||"99") || (a.title||"").localeCompare(b.title||"");
+/* The household: each person has a color. Hosting to-dos and list items can be assigned with a tap (who = person id). */
+const PCOLORS = [["coral","#D9534F"],["blue","#2F6FD0"],["green","#2E8B57"],["purple","#7B52AB"],["amber","#B87700"],["teal","#13878A"],["pink","#C2417A"],["slate","#51606F"]];
+const PC = Object.fromEntries(PCOLORS);
+const people = () => (S.people || []).slice().sort((a,b) => (a.order||0)-(b.order||0) || (a.name||"").localeCompare(b.name||""));
+const personOf = id => id ? (S.people || []).find(p => p.id === id) : null;
+const pColor = p => PC[p && p.color] || PC.slate;
+const initial = p => esc(String((p && p.name) || "?").trim().charAt(0).toUpperCase());
+const avatar = (p, cls = "") => `<span class="av ${cls}" style="--pc:${pColor(p)}" title="${esc(p.name)}">${initial(p)}</span>`;
+const whoBtn = (col, id, who) => { if (!(S.people || []).length) return ""; const p = personOf(who);
+  return `<button class="whob ${p ? "on" : ""}" data-act="who" data-col="${col}" data-id="${esc(id)}" aria-label="${p ? "Assigned to " + esc(p.name) + ". Tap to change" : "Assign someone"}" ${p ? `style="--pc:${pColor(p)}"` : ""}>${p ? initial(p) : svg("person")}</button>`; };
+const whoMatch = x => !U.who || !personOf(U.who) || x.who === U.who;
+const whoChips = () => !(S.people || []).length ? `<div class="chips whochips"><button class="chip" data-act="people">${svg("person")} Add the household</button></div>`
+  : `<div class="chips whochips"><button class="chip" aria-pressed="${!U.who}" data-act="whof" data-id="">Everyone</button>${people().map(p => `<button class="chip pchip" aria-pressed="${U.who===p.id}" data-act="whof" data-id="${p.id}" style="--pc:${pColor(p)}">${avatar(p, "sm")}${esc(p.name)}</button>`).join("")}<button class="chip quiet" data-act="people">Edit</button></div>`;
+function renderPeople(){
+  if (!U.peopleOpen) return; const ps = people(), used = ps.map(p => p.color);
+  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel people-panel" role="dialog" aria-modal="true" aria-label="The household"><div class="top-actions"><button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>The household</h3>
+    <p class="note" style="font-size:14px">Everyone gets a color. Tap the circle on any to-do to hand it to someone; tap again to pass it on.</p>
+    <div class="plist">${ps.map(p => `<div class="prow">${avatar(p, "lg")}<input type="text" class="pname" data-id="${p.id}" value="${esc(p.name)}" aria-label="Name"><div class="swatches">${PCOLORS.map(([k,c]) => `<button class="sw-c ${p.color===k?"on":""}" style="--c:${c}" data-act="pcolor" data-id="${p.id}" data-c="${k}" aria-label="${k}"></button>`).join("")}</div>${del("people", p.id)}</div>`).join("") || `<div class="empty" style="padding:8px 0">No one yet. Add the first person below.</div>`}</div>
+    <form class="add" data-form="person"><input type="text" id="npn2" placeholder="Name" aria-label="New person" autocomplete="off" required><button class="btn">Add</button></form></div></div>`;
+}
 const dayTag = d => { const n = daysTo(d); return n < 0 ? "Overdue" : n === 0 ? "Today" : n === 1 ? "Tomorrow" : `in ${n} days`; };
 const hk = t => { let h = 5381; for (const ch of t) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0; return h.toString(36); };
 const ck = (on, act, id, label) => `<button class="ck" role="checkbox" aria-checked="${!!on}" aria-label="${esc(label)}" data-act="${act}" data-id="${esc(id)}">${on ? CHECK : ""}</button>`;
@@ -143,15 +166,15 @@ const recipeOptions = sel => `<option value="">From the cookbook (optional)</opt
 /* ───────────────────────── Render shell ───────────────────────── */
 function render(){
   const counts = {lists: S.items.filter(i => !i.done).length, hosting: S.tasks.filter(t => !t.done && daysTo(t.date||todayISO()) <= 7).length};
-  setHTML($("#nav"), VIEWS.map(([k,l]) => `<button class="nav-item" role="tab" aria-selected="${U.view===k}" data-act="view" data-id="${k}">${svg(k)}<span>${l}</span>${counts[k] ? `<span class="n">${counts[k]}</span>` : ""}</button>`).join(""));
-  $("#railfoot").innerHTML = `${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}<br>${ready ? (db ? "Shared with the household" : "Not signed in") : "Loading…"}`;
+  setHTML($("#nav"), VIEWS.map(([k,l]) => `<button class="nav-item nav-${k}" role="tab" aria-selected="${U.view===k || (k==="meals" && (U.view==="dinners" || U.view==="cookbook")) || (k==="today" && U.view==="plans")}" data-act="view" data-id="${k}">${svg(k)}<span>${l}</span>${counts[k] ? `<span class="n">${counts[k]}</span>` : ""}</button>`).join(""));
+  $("#railfoot").innerHTML = `${ready && db ? `<button class="hh-btn" data-act="people" aria-label="The household">${people().length ? `<span class="avs">${people().map(p => avatar(p, "sm")).join("")}</span>Household` : `${svg("person")}Add the household`}</button>` : ""}${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}<br>${ready ? (db ? "Shared with the household" : "Not signed in") : "Loading…"}`;
   const key = [U.view, U.listId, U.wk, U.sub, U.htab, U.weekOff, U.calMode, U.calOff].join("|");
   let body;
   if (!ready) body = `<p class="status">Loading the house…</p>`;
   else if (noDb) body = `<div class="empty"><b>Sign in to claude.ai</b>Your lists, dinners and hosting plans live in the shared database. Sign in and reopen this page.</div>`;
   else body = ({today:vToday, cal:vCal, lists:vLists, dinners:vDinners, hosting:vHosting, cookbook:vCookbook, plans:vPlans})[U.view]();
   const sc = $("#main");
-  setHTML(sc, `<div class="wrap ${U.view === "cal" ? "wide" : ""}">${body}</div>`);
+  setHTML(sc, `<div class="wrap v-${U.view} ${U.view === "cal" ? "wide" : ""}">${body}</div>`);
   if (render.k !== key) { sc.scrollTop = 0; render.k = key; }
 }
 
@@ -174,13 +197,13 @@ function vToday(){
     host = `<button class="card tap" data-act="gohost" data-id="${wkKey(ev)}"><div class="host-card"><div><p class="eyebrow">Up next</p><div class="name">${esc(ev.name)}</div><div class="when">${fmt(ev.date,{weekday:"long",month:"long",day:"numeric"})}${ev.time ? " · " + esc(ev.time) : ""}</div>${ev.theme ? `<div class="sum-th">${esc(ev.theme)}</div>` : ""}</div><div class="count"><b>${n < 0 ? "Done" : n}</b><span>${n < 0 ? "" : n === 1 ? "day to go" : "days to go"}</span></div></div>
       <div class="stats"><span><b>${done}/${tasks.length}</b> to-dos done</span><span><b>${yes}/${g.length}</b> guests confirmed</span></div><div class="bar"><i style="width:${tasks.length ? Math.round(done/tasks.length*100) : 0}%"></i></div></button>`; }
   const allDue = S.tasks.filter(x => !x.done && x.date && daysTo(x.date) <= 7).sort(byDay), due = allDue.slice(0,8), hw = hostWks()[0];
-  const dueHtml = due.length ? `<div class="card soft"><div class="list">${due.map(x => { const d = daysTo(x.date), e = evById(x.eventId); return `<div class="row ${d<0?"overdue":""}">${ck(false,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div><div class="s">${d<0?"Overdue · ":d===0?"Today · ":d===1?"Tomorrow · ":""}${fmt(x.date)}${x.time ? " · " + esc(x.time) : ""}${e ? " · " + esc(e.short||e.name) : ""}</div>${x.cat === "freezer" ? `<span class="pill cat-freezer">Freezer</span>` : ""}</div></div>`; }).join("")}</div>
+  const dueHtml = due.length ? `<div class="card soft"><div class="list">${due.map(x => { const d = daysTo(x.date), e = evById(x.eventId); return `<div class="row ${d<0?"overdue":""}">${ck(false,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div><div class="s">${d<0?"Overdue · ":d===0?"Today · ":d===1?"Tomorrow · ":""}${fmt(x.date)}${x.time ? " · " + esc(x.time) : ""}${e ? " · " + esc(e.short||e.name) : ""}</div>${x.cat === "freezer" ? `<span class="pill cat-freezer">Freezer</span>` : ""}</div>${whoBtn("tasks", x.id, x.who)}</div>`; }).join("")}</div>
     ${hw ? `<div class="inline" style="margin-top:6px"><button class="btn sm ghost" data-act="golist" data-id="${HOST}${hw.k}">${allDue.length > due.length ? `See all ${allDue.length}` : `All ${esc(hostName(hw.k))} to-dos`}</button></div>` : ""}</div>` : "";
   const soon = S.plans.filter(p => p.date && daysTo(p.endDate || p.date) >= 0 && daysTo(p.date) <= 14).sort((a,b) => byDate(a,b) || (a.time||"").localeCompare(b.time||""));
   const coming = `<div class="card soft">${soon.length ? `<div class="list">${soon.map(p => planRow(p)).join("")}</div>` : `<div class="empty" style="padding:12px 4px"><b>Nothing on the horizon</b>Trips, appointments, nights out. Add one below or say "New York next Sunday".</div>`}
     <form class="add" data-form="plan" style="margin-top:10px"><input type="text" id="np" placeholder="e.g. New York for the day" required><input type="date" id="npd" value="${t}"><input type="text" id="npt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button><button class="btn quiet" type="button" data-act="view" data-id="plans">All plans</button></form></div>`;
   return `<div class="ph"><div><svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg><h1>${greet}</h1><div class="sub">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}${plansOn(t).length ? " · " + esc(plansOn(t).map(p => p.title).join(", ")) : ""}</div></div>${wxCard()}</div>
-    <div class="widgets">${calCard()}${habitsCard()}</div>
+    <div class="widgets">${calCard()}</div>
     <div class="today-grid"><div class="card dinner-hero">${hero}${strip}</div>${host}</div>
     ${due.length ? `<h2 class="eyebrow">Hosting to-dos this week</h2>${dueHtml}` : ""}
     <h2 class="eyebrow">Lists</h2>${lcards}
@@ -374,7 +397,7 @@ function vLists(){
     return `<div class="sw" data-col="items" data-id="${i.id}"><div class="row ${i.done?"done":""} ${isIdeas?"idea-row":""}">${ck(i.done,"item",i.id,i.text)}<div class="main"><div class="t">${esc(i.text)}</div>${i.note ? `<div class="s">${esc(i.note)}</div>` : ""}${tm || i.link || rk || hasContent(i) || (isIdeas && ideaTags(i).length) ? `<div>${timePill(tm)}${rk ? `<button class="pill link" data-act="recipe" data-id="${rk}">Recipe</button>` : hasContent(i) ? `<button class="pill link" data-act="recipe" data-id="item:${i.id}">Recipe</button>` : ""}${linkPill(i.link)}${isIdeas ? tagPills(i) : ""}</div>` : ""}
     ${U.editList ? `<div class="edit"><input type="text" id="it-${i.id}" value="${esc(i.time||"")}" placeholder="Time, e.g. 30 min" style="flex:0 1 160px"><input type="text" id="il-${i.id}" value="${esc(i.link||"")}" placeholder="Link (Pinterest, recipe site)" style="flex:1 1 200px">${isIdeas ? `<input type="text" id="ig-${i.id}" value="${esc((i.tags||[]).join(", "))}" placeholder="Tags, e.g. crockpot, kid friendly" style="flex:1 1 180px">` : ""}<button class="btn sm ghost" data-act="saveitem" data-id="${i.id}">Save</button></div>` : ""}
     ${isIdeas && !i.done && U.pickIdea === i.id ? `<div class="daypick">${week.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(i.text)}">${d===todayISO()?"Tonight":fmt(d,{weekday:"short"})}</button>`).join("")}<button class="chip" data-act="plan" data-id="">Cancel</button></div>` : ""}</div>
-    ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${U.editList ? del("items", i.id) : ""}</div><button class="sw-del" data-act="swdel" data-col="items" data-id="${i.id}" tabindex="-1">Delete</button></div>`; };
+    ${isIdeas && !i.done && U.pickIdea !== i.id ? `<button class="pill link plan" data-act="plan" data-id="${i.id}">Plan it</button>` : ""}${!isIdeas ? whoBtn("items", i.id, i.who) : ""}${U.editList ? del("items", i.id) : ""}</div><button class="sw-del" data-act="swdel" data-col="items" data-id="${i.id}" tabindex="-1">Delete</button></div>`; };
   const main = `<div class="lhead"><h2>${esc(L.name)}</h2><div class="tools">${safeUrl(L.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(L.link))}" target="_blank" rel="noopener">${esc(linkLabel(L.link))} board ↗</a>` : ""}${done.length ? `<button class="btn sm ghost" data-act="clearchecked" data-id="${L.id}">Clear ${done.length} checked</button>` : ""}<button class="btn sm ${U.editList?"":"quiet"}" data-act="editlist">${U.editList ? "Done" : "Edit"}</button>${U.editList ? `<button class="btn sm clay" data-act="dellist" data-id="${L.id}">${U.armed==="list"+L.id ? "Really delete?" : "Delete list"}</button>` : ""}</div></div>
     ${U.editList ? `<form class="add" data-form="listlink" data-id="${L.id}" style="margin:0 0 10px"><input type="text" id="ll" value="${esc(L.link||"")}" placeholder="Board or page link for this list (e.g. your Pinterest board)"><button class="btn sm ghost">Save link</button></form>` : ""}
     <form class="quickadd" data-form="item"><input type="text" id="ni" placeholder="${isIdeas ? "A dinner idea…" : "Add to " + esc(L.name) + "…"}" aria-label="Add item" autocomplete="off">${isIdeas ? `<input type="text" id="ni-time" placeholder="Time" aria-label="How long it takes" style="flex:0 1 110px">` : ""}<button class="rbtn primary" aria-label="Add">${svg("plus")}</button></form>
@@ -388,12 +411,12 @@ function vLists(){
 function vHostList(k){
   const wk = weekends().find(x => x.k === k); if (!wk) return `<div class="empty"><b>Nothing planned</b></div>`;
   const all = hostTasks(k), catLab = Object.fromEntries(CATS), f = U.hlF || "all", inF = x => f === "all" || (x.cat||"food") === f;
-  const open = all.filter(x => !x.done && inF(x)).sort(byDay), done = all.filter(x => x.done && inF(x)).sort((a,b) => byDay(b,a));
+  const open = all.filter(x => !x.done && inF(x) && whoMatch(x)).sort(byDay), done = all.filter(x => x.done && inF(x) && whoMatch(x)).sort((a,b) => byDay(b,a));
   const left = c => all.filter(x => !x.done && (c === "all" || (x.cat||"food") === c)).length;
   const first = wk.evs[0], last = wk.evs[wk.evs.length-1], n = daysTo(first.date), multi = wk.evs.length > 1, t = todayISO();
   const row = x => { const e = evById(x.eventId), od = !x.done && x.date && x.date < t;
     return `<div class="sw" data-col="tasks" data-id="${x.id}"><div class="row ${x.done?"done":""} ${od?"overdue":""}">${ck(x.done,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div>${x.detail ? `<div class="s">${esc(x.detail)}</div>` : ""}
-      <div><span class="pill cat-${x.cat||"food"}">${catLab[x.cat||"food"] || "Food"}</span>${multi && e && (e.short||e.name) !== hostName(k) ? `<span class="pill">${esc(e.short||e.name)}</span>` : ""}${x.recipe && R[x.recipe] ? `<button class="pill link" data-act="recipe" data-id="${x.recipe}">Recipe</button>` : ""}${x.done && x.date ? `<span class="pill">${fmt(x.date)}</span>` : ""}</div></div>${x.time ? `<span class="time">${esc(x.time)}</span>` : ""}</div><button class="sw-del" data-act="swdel" data-col="tasks" data-id="${x.id}" tabindex="-1">Delete</button></div>`; };
+      <div><span class="pill cat-${x.cat||"food"}">${catLab[x.cat||"food"] || "Food"}</span>${multi && e && (e.short||e.name) !== hostName(k) ? `<span class="pill">${esc(e.short||e.name)}</span>` : ""}${x.recipe && R[x.recipe] ? `<button class="pill link" data-act="recipe" data-id="${x.recipe}">Recipe</button>` : ""}${x.done && x.date ? `<span class="pill">${fmt(x.date)}</span>` : ""}</div></div>${x.time ? `<span class="time">${esc(x.time)}</span>` : ""}${whoBtn("tasks", x.id, x.who)}</div><button class="sw-del" data-act="swdel" data-col="tasks" data-id="${x.id}" tabindex="-1">Delete</button></div>`; };
   let groups = "", cur = null;
   open.forEach(x => { const key = x.date && x.date < t ? "overdue" : (x.date || "");
     if (key !== cur) { if (cur !== null) groups += `</div></div>`; cur = key;
@@ -406,12 +429,13 @@ function vHostList(k){
   return `<div class="lhead"><h2>${esc(hostName(k))} to-dos</h2><div class="tools"><button class="btn sm ghost" data-act="gohost" data-id="${k}">Menu, rooms &amp; day-of</button></div></div>
     <p class="note" style="margin:0 0 6px">${first.date === last.date ? fmt(first.date,{weekday:"long",month:"long",day:"numeric"}) : `${fmt(first.date)} – ${fmt(last.date)}`}${n > 0 ? ` · ${n} day${n===1?"":"s"} to go` : ""}</p>
     <form class="quickadd host-add" data-form="htask" data-wk="${k}"><input type="text" id="nht" placeholder="Add a hosting to-do…" aria-label="New hosting to-do" autocomplete="off"><input type="date" id="nhtd" value="${defDate}" aria-label="Day"><select id="nhtc" aria-label="Kind">${CATS.map(([c,l]) => `<option value="${c}" ${(f===c || (f==="all" && c==="house"))?"selected":""}>${l}</option>`).join("")}</select><button class="rbtn primary" aria-label="Add">${svg("plus")}</button></form>
-    ${chips}
+    ${chips}${whoChips()}
     ${groups || `<div class="card soft"><div class="empty"><b>${f === "all" ? "All done" : "Nothing left here"}</b>${f === "all" ? "Every to-do for the weekend is checked off." : "Tap All to see the rest."}</div></div>`}
     ${done.length ? `<details class="checked"><summary>Checked off (${done.length})</summary><div class="card soft"><div class="list">${done.map(row).join("")}</div></div></details>` : ""}`;
 }
 
-/* ───────────────────────── Dinners ───────────────────────── */
+/* ───────────────────────── Meals: the week's dinners and the cookbook, one tab ───────────────────────── */
+const mealsHead = sub => `<div class="ph"><div><h1>Meals</h1><div class="sub">${esc(sub)}</div></div><div class="seg" role="tablist" aria-label="Meals"><button aria-pressed="${U.view==="dinners"}" data-act="mtab" data-id="dinners">This week</button><button aria-pressed="${U.view==="cookbook"}" data-act="mtab" data-id="cookbook">Cookbook</button></div></div>`;
 function vDinners(){
   const t = todayISO(), start = addDays(weekStart(t), U.weekOff*7), days = [0,1,2,3,4,5,6].map(i => addDays(start,i));
   const range = `${fmt(start,{month:"long",day:"numeric"})} – ${fmt(days[6],{month:pd(start).getMonth()===pd(days[6]).getMonth()?undefined:"long",day:"numeric"})}`;
@@ -426,7 +450,7 @@ function vDinners(){
   const allIdeas = ideasList ? openItems(ideasList.id) : [], ideas = allIdeas.filter(ideaMatches);
   const ideasHtml = `<div class="ideas-panel"><div class="ideas-head"><p class="eyebrow">Meal ideas</p>${ideasList && safeUrl(ideasList.link) ? `<a class="pill link ext" href="${esc(safeUrl(ideasList.link))}" target="_blank" rel="noopener" style="margin:0">${esc(linkLabel(ideasList.link))} board ↗</a>` : ""}</div>${tagChips(allIdeas)}${ideas.length ? `<div class="ideas">${ideas.map(i => { const tm = shortTime(i.time, i.recipe || recipeFor(i.text)); return `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="idearecipe" data-id="${i.id}"><span class="plus" aria-hidden="true">+</span><span class="idea-t">${esc(i.text)}${tm || ideaTags(i).length ? `<span>${esc([tm, ...ideaTags(i).filter(t => ["crockpot","instantpot","sheetpan","onepot","airfryer","grill"].includes(t)).map(t => TAG_LABEL[t])].filter(Boolean).join(" · "))}</span>` : ""}</span></button>`; }).join("")}</div>` : allIdeas.length ? `<p class="note">Nothing matches those filters.</p>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
     ${U.pickIdea && ideas.find(i => i.id === U.pickIdea) ? `<p class="note" style="margin-top:14px">Put <b>${esc(ideas.find(i => i.id === U.pickIdea).text)}</b> on which night?</p><div class="daypick">${days.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(ideas.find(i => i.id === U.pickIdea).text)}">${fmt(d,{weekday:"short",day:"numeric"})}</button>`).join("")}</div>` : ""}</div>`;
-  return `<div class="ph"><div><h1>Dinners</h1><div class="sub">Plan the week on Sunday, shop once.</div></div></div>${nav}${cards}${edit}${ideasHtml}`;
+  return `${mealsHead("Plan the week on Sunday, shop once.")}${nav}${cards}${edit}${ideasHtml}`;
 }
 
 /* ───────────────────────── Calendar: everything with a date, in one place ─────────────────────────
@@ -456,8 +480,8 @@ function dayItems(d, compact){
   if (m && m.title) out.push(`<button class="ce dinner" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}">${ci("dinner")}${esc(m.title)}</button>`);
   if (mt) mt.timed.forEach(x => { const href = safeUrl(x.e.webLink), inner = `<b>${calTime(x.s)}</b> ${esc(x.e.subject || "(No title)")}`;
     out.push(href ? `<a class="ce meet" href="${esc(href)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="ce meet">${inner}</div>`); });
-  const tk = tasksOn(d), nDone = tk.filter(x => x.done).length;
-  tk.filter(x => !x.done).forEach(x => out.push(`<div class="ce todo ${d < t ? "late" : ""}">${ck(false, "task", x.id, x.title)}<span>${x.cat === "freezer" ? ci("fz") : ""}${esc(x.title)}</span></div>`));
+  const tk = tasksOn(d).filter(whoMatch), nDone = tk.filter(x => x.done).length;
+  tk.filter(x => !x.done).forEach(x => { const p = personOf(x.who); out.push(`<div class="ce todo ${d < t ? "late" : ""}" ${p ? `style="--pc:${pColor(p)}"` : ""}>${ck(false, "task", x.id, x.title)}<span>${x.cat === "freezer" ? ci("fz") : ""}${esc(x.title)}</span></div>`); });
   if (nDone && !compact) out.push(`<button class="ce donecount" data-act="calday" data-id="${d}">${CHECK}${nDone} done</button>`);
   return out;
 }
@@ -484,12 +508,12 @@ function vCal(){
         <div class="witems">${items.join("") || `<button class="wempty" data-act="calday" data-id="${d}">Free</button>`}</div></div>`; }).join("")}</div>`;
   }
   const head = `<div class="ph"><div><h1>Calendar</h1><div class="sub">Meetings, dinners, plans and hosting in one place</div></div>${modes}</div>
-    <div class="weeknav cal-nav"><span class="range">${range}</span><button class="rbtn" data-act="caloff" data-id="-1" aria-label="Previous">${svg("prev")}</button>${U.calOff ? `<button class="btn sm ghost" data-act="caloff" data-id="0">Today</button>` : ""}<button class="rbtn" data-act="caloff" data-id="1" aria-label="Next">${svg("next")}</button></div>${legend}`;
+    <div class="weeknav cal-nav"><span class="range">${range}</span><button class="rbtn" data-act="caloff" data-id="-1" aria-label="Previous">${svg("prev")}</button>${U.calOff ? `<button class="btn sm ghost" data-act="caloff" data-id="0">Today</button>` : ""}<button class="rbtn" data-act="caloff" data-id="1" aria-label="Next">${svg("next")}</button></div>${legend}${whoChips()}`;
   return head + grid + calDayPanel(U.calSel || t);
 }
 
 function calDayPanel(d){
-  const t = todayISO(), m = S.dinners[d] || {}, mt = meetingsOn(d), pl = plansOn(d), evs = evsOn(d), tk = tasksOn(d), w = wxOn(d);
+  const t = todayISO(), m = S.dinners[d] || {}, mt = meetingsOn(d), pl = plansOn(d), evs = evsOn(d), tk = tasksOn(d).filter(whoMatch), w = wxOn(d);
   const now = new Date(), nowMin = d === t ? now.getHours()*60 + now.getMinutes() : null;
   const sec = (label, cls, body) => `<div class="dsec ${cls}"><p class="eyebrow">${label}</p>${body}</div>`;
   const hostWk = (evs[0] && wkKey(evs[0])) || ((S.events.filter(e => e.date >= d).sort(byDate)[0]) || {}).weekend;
@@ -497,7 +521,7 @@ function calDayPanel(d){
     sec("Dinner", "dinner", m.title ? `<div class="drow"><b>${esc(m.title)}</b>${m.note ? `<span>${esc(m.note)}</span>` : ""}<div class="inline">${recipeObj(m) ? `<button class="btn sm ghost" data-act="dayrecipe" data-id="${d}">Recipe</button>` : ""}<button class="btn sm quiet" data-act="editdinner" data-id="${d}">Change</button></div></div>` : `<div class="drow none">Nothing planned <button class="btn sm ghost" data-act="editdinner" data-id="${d}">Plan dinner</button></div>`),
     evs.length || pl.length ? sec("Plans &amp; events", "plan", `<div class="list">${evs.map(e => `<button class="drow link" data-act="gohost" data-id="${esc(wkKey(e))}"><b>${esc(e.name)}</b><span>${esc(e.time || "")}</span></button>`).join("")}${pl.map(p => planRow(p)).join("")}</div>`) : "",
     mt && (mt.timed.length || mt.allDay.length) ? sec("Meetings", "meet", `${mt.allDay.length ? `<div class="cal-all">${mt.allDay.map(e => `<span class="pill">${esc(e.subject || "All day")}</span>`).join("")}</div>` : ""}<div class="cal-list">${calRows(mt.timed, nowMin)}</div>`) : "",
-    tk.length ? sec("Hosting to-dos", "todo", `<div class="list">${tk.map(x => `<div class="row ${x.done?"done":""}">${ck(x.done,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div>${x.detail ? `<div class="s">${esc(x.detail)}</div>` : ""}${x.cat === "freezer" ? `<span class="pill cat-freezer">Freezer</span>` : ""}${x.recipe && R[x.recipe] ? `<button class="pill link" data-act="recipe" data-id="${x.recipe}">Recipe</button>` : ""}</div>${x.time ? `<span class="time">${esc(x.time)}</span>` : ""}</div>`).join("")}</div>`) : ""
+    tk.length ? sec("Hosting to-dos", "todo", `<div class="list">${tk.map(x => `<div class="row ${x.done?"done":""}">${ck(x.done,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div>${x.detail ? `<div class="s">${esc(x.detail)}</div>` : ""}${x.cat === "freezer" ? `<span class="pill cat-freezer">Freezer</span>` : ""}${x.recipe && R[x.recipe] ? `<button class="pill link" data-act="recipe" data-id="${x.recipe}">Recipe</button>` : ""}</div>${x.time ? `<span class="time">${esc(x.time)}</span>` : ""}${whoBtn("tasks", x.id, x.who)}</div>`).join("")}</div>`) : ""
   ].filter(Boolean).join("");
   const kinds = [["plan","Plan"],["dinner","Dinner"], ...(hostWk ? [["task","Hosting to-do"]] : [])];
   const kind = kinds.some(k => k[0] === U.calKind) ? U.calKind : "plan";
@@ -539,7 +563,7 @@ function vPlan(){
     if (x.date !== last) { if (last !== null) html += `</div></div>`; last = x.date; const d = daysTo(x.date);
       html += `<div class="day ${d<0?"past":""}">${fmt(x.date)}<small class="${d===0?"now":d>0&&d<=7?"soon":""}">${d===0?"Today":d===1?"Tomorrow":d>0?`in ${d} days`:""}</small></div><div class="card soft"><div class="list">`; }
     const e = evById(x.eventId), od = !x.done && daysTo(x.date) < 0;
-    html += `<div class="row ${x.done?"done":""} ${od?"overdue":""}">${ck(x.done,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div>${x.detail?`<div class="s">${esc(x.detail)}</div>`:""}${od?`<span class="pill od">Overdue</span>`:""}<span class="pill cat-${x.cat||"food"}">${catLab[x.cat||"food"]}</span>${multi&&e?`<span class="pill">${esc(e.short||e.name)}</span>`:""}${x.recipe&&R[x.recipe]?`<button class="pill link" data-act="recipe" data-id="${x.recipe}">${esc(R[x.recipe].title)}</button>`:""}</div>${x.time?`<span class="time">${esc(x.time)}</span>`:""}${del("tasks",x.id)}</div>`;
+    html += `<div class="row ${x.done?"done":""} ${od?"overdue":""}">${ck(x.done,"task",x.id,x.title)}<div class="main"><div class="t">${esc(x.title)}</div>${x.detail?`<div class="s">${esc(x.detail)}</div>`:""}${od?`<span class="pill od">Overdue</span>`:""}<span class="pill cat-${x.cat||"food"}">${catLab[x.cat||"food"]}</span>${multi&&e?`<span class="pill">${esc(e.short||e.name)}</span>`:""}${x.recipe&&R[x.recipe]?`<button class="pill link" data-act="recipe" data-id="${x.recipe}">${esc(R[x.recipe].title)}</button>`:""}</div>${x.time?`<span class="time">${esc(x.time)}</span>`:""}${whoBtn("tasks", x.id, x.who)}${del("tasks",x.id)}</div>`;
   });
   if (last !== null) html += `</div></div>`;
   return html + `<h2 class="eyebrow">Add a to-do</h2><form class="add" data-form="task"><input type="text" id="nt" placeholder="e.g. Iron the tablecloth" required><select id="ntc" aria-label="Category">${CATS.map(([k,l]) => `<option value="${k}" ${U.catF===k?"selected":""}>${l}</option>`).join("")}</select>${evSelect("nte")}<input type="date" id="ntd" value="${scopeEvs()[0].date}"><input type="text" id="ntt" placeholder="Time (optional)" style="flex:0 1 150px"><button class="btn">Add</button></form>`;
@@ -668,7 +692,7 @@ function vCookbook(){
   const q = norm(U.q), all = Object.entries(R).sort((a,b) => a[1].title.localeCompare(b[1].title));
   const hits = all.filter(([k,v]) => (U.rcat === "All" || RCAT[k] === U.rcat) && (!q || norm(v.title).includes(q) || v.ingredients.some(i => norm(i).includes(q))));
   const card = ([k,v]) => `<button class="rcard" data-act="recipe" data-id="${k}"><b>${esc(v.title)}</b><span>${esc(v.meta.slice(0,2).join(" · "))}</span><span class="cat">${esc(RCAT[k]||"")}</span></button>`;
-  return `<div class="ph"><div><h1>Cookbook</h1><div class="sub">${all.length} family recipes</div></div></div>
+  return `${mealsHead(`${all.length} family recipes`)}
     <div class="cb-tools"><input type="search" id="cb-q" value="${esc(U.q)}" placeholder="Search recipes or ingredients" aria-label="Search recipes"></div>
     <div class="chips">${["All",...RCATS].map(c => `<button class="chip" aria-pressed="${U.rcat===c}" data-act="rcat" data-id="${c}">${c}</button>`).join("")}</div>
     ${hits.length ? `<div class="rgrid">${hits.map(card).join("")}</div>` : `<div class="empty"><b>No recipes match</b>Try a shorter word.</div>`}`;
@@ -889,7 +913,12 @@ document.addEventListener("click", async ev => {
   if (a === "closebg" && ev.target !== b) return;
   if (a !== "del" && a !== "dellist") U.armed = null;
   switch (a) {
-    case "view": U.view = id; ls.set("hph_view", id); break;
+    case "view": U.view = id === "meals" ? (U.mtab || "dinners") : id; ls.set("hph_view", U.view); break;
+    case "mtab": U.mtab = id; U.view = id; ls.set("hph_view", id); ls.set("hph_mtab", id); break;
+    case "who": { const col = b.dataset.col, x = (col === "items" ? S.items : S.tasks).find(t => t.id === id); if (!x) return; const ids = ["", ...people().map(p => p.id)], nx = ids[(ids.indexOf(x.who || "") + 1) % ids.length]; w(col, id, {who: nx}); const p = personOf(nx); toast(p ? `${p.name} has it` : "Unassigned"); return; }
+    case "whof": U.who = id; ls.set("hph_who", id); break;
+    case "people": U.peopleOpen = true; renderPeople(); { const i = $("#npn2"); if (i && !people().length) i.focus(); } return;
+    case "pcolor": w("people", id, {color: b.dataset.c}); return;
     case "golist": U.view = "lists"; U.listId = id; ls.set("hph_view","lists"); ls.set("hph_list", id); break;
     case "gohost": U.view = "hosting"; U.wk = id; U.sub = "all"; ls.set("hph_view","hosting"); ls.set("hph_wk", id); break;
     case "list": U.listId = id; U.editList = false; U.pickIdea = null; ls.set("hph_list", id); break;
@@ -901,7 +930,7 @@ document.addEventListener("click", async ev => {
     case "pickday": { const title = b.dataset.idea || "", idea = S.items.find(i => i.id === U.pickIdea) || {}; if (title) { const cur = S.dinners[id] || {}; const rk = idea.recipe && R[idea.recipe] ? idea.recipe : recipeFor(title); await w("dinners", id, {...cur, title, recipe: rk, note: cur.note || "", time: idea.time || "", link: idea.link || "", ingredients: idea.ingredients || [], steps: idea.steps || [], servings: idea.servings || ""}, "set"); toast(`${title} on ${fmt(id,{weekday:"long"})}`); } U.pickIdea = null; $("#overlay").innerHTML = ""; break; }
     case "dayrecipe": showRecipe("dinner:" + id); return;
     case "idearecipe": { if (recipeFromRef("item:" + id)) { showRecipe("item:" + id); return; } U.pickIdea = U.pickIdea === id ? null : id; break; }
-    case "editdinner": $("#overlay").innerHTML = ""; U.view = "dinners"; ls.set("hph_view","dinners"); U.weekOff = Math.round((pd(weekStart(id)) - pd(weekStart(todayISO()))) / (7*864e5)); U.editDinner = id; U.pickIdea = null; break;
+    case "editdinner": $("#overlay").innerHTML = ""; U.peopleOpen = false; U.view = "dinners"; U.mtab = "dinners"; ls.set("hph_view","dinners"); U.weekOff = Math.round((pd(weekStart(id)) - pd(weekStart(todayISO()))) / (7*864e5)); U.editDinner = id; U.pickIdea = null; break;
     case "canceldinner": U.editDinner = null; break;
     case "cleardinner": await w("dinners", id, null, "delete"); U.editDinner = null; break;
     case "week": U.weekOff = id === "0" ? 0 : U.weekOff + (+id); U.editDinner = null; U.pickIdea = null; break;
@@ -928,7 +957,7 @@ document.addEventListener("click", async ev => {
     case "addcourse": U.addCourse = (id && U.addCourse !== id) ? id : null; render(); if (U.addCourse) { const q = $("#nq"); if (q) q.focus(); } return;
     case "savedish": w("dishes", id, {who:$("#who-"+id).value.trim(), makeAhead:$("#ma-"+id).value.trim()}); U.open[id] = false; break;
     case "swdel": w(b.dataset.col, id, null, "delete"); toast("Deleted"); break;
-    case "del": { const k = b.dataset.col+id; if (U.armed === k) { U.armed = null; w(b.dataset.col, id, null, "delete"); } else U.armed = k; break; }
+    case "del": { const k = b.dataset.col+id; if (U.armed === k) { U.armed = null; w(b.dataset.col, id, null, "delete"); } else U.armed = k; if (b.dataset.col === "people") { renderPeople(); return; } break; }
     case "recipe": showRecipe(id); return;
     case "rcat": U.rcat = id; break;
     case "cook": startCook(id); return;
@@ -943,14 +972,14 @@ document.addEventListener("click", async ev => {
     case "mic": if (rec) stopMic(); else startMic(); return;
     case "undo": undoLast(); return;
     case "dismiss": $("#capout").innerHTML = ""; return;
-    case "close": case "closebg": $("#overlay").innerHTML = ""; return;
+    case "close": case "closebg": U.peopleOpen = false; $("#overlay").innerHTML = ""; return;
     default: return;
   }
   render();
 });
 document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; } if (e.key === "Escape") { if (COOK) stopCook(); else $("#overlay").innerHTML = ""; } });
 document.addEventListener("input", e => { if (e.target.id === "cb-q") { U.q = e.target.value; render(); } });
-document.addEventListener("change", e => { const i = e.target.closest("[data-set]"); if (!i || !i.value) return; w("events", i.dataset.ev, {[i.dataset.set]: i.dataset.set === "ovenCap" ? +i.value : i.value}); });
+document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("pname")) { const n = e.target.value.trim(); if (n) w("people", e.target.dataset.id, {name:n}); return; } const i = e.target.closest("[data-set]"); if (!i || !i.value) return; w("events", i.dataset.ev, {[i.dataset.set]: i.dataset.set === "ovenCap" ? +i.value : i.value}); });
 document.addEventListener("submit", async e => {
   e.preventDefault(); const f = e.target.dataset.form, v = s => ($(s) ? $(s).value : "").trim();
   if (e.target.id === "capform") { const t = v("#capin"); if (!t) return; $("#capin").value = ""; submitCapture(t); return; }
@@ -960,6 +989,8 @@ document.addEventListener("submit", async e => {
   if (f === "list" && v("#nl")) { const name = v("#nl"); const id = await add("lists", {name, order:S.lists.length, createdAt:Date.now()}); if (id) { U.listId = id; ls.set("hph_list", id); } }
   if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe: recipe || recipeFor(title), note:v("#dn-note"), time:v("#dn-time"), link:v("#dn-link")}, "set"); U.editDinner = null; toast("Saved"); }
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
+  if (f === "person" && v("#npn2")) { const used = people().map(p => p.color), color = (PCOLORS.find(([k]) => !used.includes(k)) || PCOLORS[people().length % PCOLORS.length])[0];
+    await add("people", {name:v("#npn2"), color, order:Date.now()}); e.target.reset(); renderPeople(); const i = $("#npn2"); if (i) i.focus(); return; }
   if (f === "calnew" && v("#cnt")) { const d = e.target.dataset.date, text = v("#cnt"), tm = v("#cntt"), kind = U.calKind;
     if (kind === "dinner") { const cur = S.dinners[d] || {}; await w("dinners", d, {...cur, title:text, recipe:recipeFor(text), note:cur.note || "", time:cur.time || "", link:cur.link || ""}, "set"); toast(`${text} on ${fmt(d,{weekday:"long"})}`); }
     else if (kind === "task" && e.target.dataset.wk) { const evs = S.events.filter(x => wkKey(x) === e.target.dataset.wk).sort(byDate), ev = evs.find(x => x.date >= d) || evs[evs.length-1];
@@ -1011,9 +1042,9 @@ renderCapture(); render();
   use("mcp").then(m => { wxStart(m); calStart(m); });
   db = await use("db");
   if (!db) { ready = true; noDb = true; render(); return; }
-  const cols = ["events","dishes","guests","tasks","extras","rooms","lists","items","plans"];
+  const cols = ["events","dishes","guests","tasks","extras","rooms","lists","items","plans","people"];
   const first = () => { if (++seen >= cols.length + 2) ready = true; render(); };
-  cols.forEach(c => db.collection(c).onSnapshot(s => { S[c] = s.docs.map(d => ({id:d.id, ...d.data()})); first(); }, () => first()));
+  cols.forEach(c => db.collection(c).onSnapshot(s => { S[c] = s.docs.map(d => ({id:d.id, ...d.data()})); first(); if (c === "people") renderPeople(); }, () => first()));
   db.collection("checks").onSnapshot(s => { S.checks = {}; s.docs.forEach(d => S.checks[d.id] = d.data()); first(); }, () => first());
   db.collection("dinners").onSnapshot(s => { S.dinners = {}; s.docs.forEach(d => S.dinners[d.id] = d.data()); first(); }, () => first());
   db.collection("shared").onSnapshot(s => { S.shared = {}; s.docs.forEach(d => S.shared[d.id] = d.data()); if (U.view === "today" || U.view === "cal") render(); }, () => {});

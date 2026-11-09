@@ -2,9 +2,10 @@
    Layout: a left rail with five destinations and a content column that scrolls on its own; the capture bar sits above
    the content on every screen. Under 820px the rail becomes a bottom tab bar. Light only, by choice. */
 :root{
-  --bg:#EDEAE4; --card:#F6F4F0; --raised:#FFFFFF; --ink:#2B2925; --muted:#7B756C; --faint:#A39D93; --line:#DBD5CA; --chip:#E5E0D7;
-  --green:#3D6B56; --green-soft:#DAE6DF; --clay:#B45F3B; --clay-soft:#F2DDD2; --gold:#A6874F; --gold-soft:#EFE5D0;
-  --blue:#587894; --blue-soft:#DBE4EC; --berry:#8E3A4A; --berry-soft:#EEDADF; --ok:#4A8A62; --warn:#B3261E;
+  --bg:#F8F5F0; --card:#FDFBF8; --raised:#FFFFFF; --ink:#24221F; --muted:#6E6860; --faint:#A19A90; --line:#E9E3D9; --chip:#F1ECE4;
+  --green:#2E7D5B; --green-soft:#DCF1E6; --clay:#CC5A28; --clay-soft:#FCE4D6; --gold:#A87508; --gold-soft:#FCF0D3;
+  --blue:#2F6FB5; --blue-soft:#DDEBFA; --berry:#B4365C; --berry-soft:#FADDE6; --plum:#7650A8; --plum-soft:#EEE6F8;
+  --teal:#16807F; --teal-soft:#D6F1EF; --ok:#2E8B57; --warn:#B3261E;
   --display:'Cormorant Garamond',Georgia,'Times New Roman',serif;
   --sans:'Jost','Avenir Next','Helvetica Neue',Arial,sans-serif;
   --r:20px; --pill:999px;
@@ -528,3 +529,73 @@ a.ce.meet{cursor:pointer}
   .mhead div{padding:6px 4px;letter-spacing:.06em;text-align:center}
   .mnum{align-self:center}
 }
+
+
+/* Color: each section has its own color, used in the menu and the page title.
+   Today marigold, Calendar blue, Lists green, Meals terracotta, Hosting berry. */
+.rail{background:var(--raised)}
+.nav-today{--sc:var(--gold);--ss:var(--gold-soft)}
+.nav-cal{--sc:var(--blue);--ss:var(--blue-soft)}
+.nav-lists{--sc:var(--green);--ss:var(--green-soft)}
+.nav-meals{--sc:var(--clay);--ss:var(--clay-soft)}
+.nav-hosting{--sc:var(--berry);--ss:var(--berry-soft)}
+.nav-item svg{color:var(--sc)}
+.nav-item[aria-selected="true"]{background:var(--ss);color:var(--sc);box-shadow:none}
+.nav-item[aria-selected="true"] .n{color:var(--sc)}
+.v-today .ph h1,.v-plans .ph h1{color:var(--ink)}
+.v-cal .ph h1{color:var(--blue)}
+.v-lists .ph h1{color:var(--green)}
+.v-dinners .ph h1,.v-cookbook .ph h1{color:var(--clay)}
+.v-hosting .ph h1{color:var(--berry)}
+
+/* Today: tinted cards so each list reads at a glance */
+.lcard{background:var(--lcs,var(--raised));box-shadow:none;border:1px solid transparent}
+.lcard .eyebrow,.lcard .big{color:var(--lc,var(--ink))}
+.lcard .big.faint{opacity:.45}
+.grid.c4 .lcard:nth-child(7n+2){--lc:var(--green);--lcs:var(--green-soft)}
+.grid.c4 .lcard:nth-child(7n+3){--lc:var(--blue);--lcs:var(--blue-soft)}
+.grid.c4 .lcard:nth-child(7n+4){--lc:var(--gold);--lcs:var(--gold-soft)}
+.grid.c4 .lcard:nth-child(7n+5){--lc:var(--plum);--lcs:var(--plum-soft)}
+.grid.c4 .lcard:nth-child(7n+6){--lc:var(--teal);--lcs:var(--teal-soft)}
+.grid.c4 .lcard:nth-child(7n+7){--lc:var(--clay);--lcs:var(--clay-soft)}
+.grid.c4 .lcard:nth-child(7n+1){--lc:var(--berry);--lcs:var(--berry-soft)}
+.grid.c4 .lcard.host{--lc:var(--clay);--lcs:var(--clay-soft)}
+.dinner-hero > .eyebrow:first-child{color:var(--green)}
+.today-grid > .card.tap{background:var(--berry-soft);box-shadow:none}
+.today-grid > .card.tap .eyebrow{color:var(--berry)}
+.today-grid > .card.tap .count b{color:var(--berry)}
+.today-grid > .card.tap .bar i{background:var(--berry)}
+.card.soft.cal{border-left:4px solid var(--blue)}
+.card.soft.cal .eyebrow{color:var(--blue)}
+.wx.card.soft{background:var(--gold-soft);border-color:transparent}
+.wx .eyebrow{color:var(--gold)}
+
+/* People */
+.av{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;background:var(--pc);color:#fff;font:600 13px/1 var(--sans)}
+.av.sm{width:22px;height:22px;font-size:11px}
+.av.xs{width:15px;height:15px;font-size:9px;margin-right:4px;vertical-align:-2px;display:inline-grid}
+.av.lg{width:42px;height:42px;font-size:18px}
+.whob{flex:0 0 32px;width:32px;height:32px;border-radius:50%;border:1.5px dashed var(--line);background:none;color:var(--faint);display:grid;place-items:center;cursor:pointer;padding:0;font:600 14px var(--sans);margin-top:-1px}
+.whob svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.whob:hover{border-color:var(--faint)}
+.whob.on{border:0;background:var(--pc);color:#fff}
+.whochips{margin:0 0 12px}
+.whochips .chip{display:inline-flex;align-items:center;gap:8px}
+.whochips .chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.pchip{padding-left:6px}
+.pchip[aria-pressed="true"]{background:var(--pc);border-color:var(--pc);color:#fff}
+.pchip[aria-pressed="true"] .av{background:#fff;color:var(--pc)}
+.chip.quiet{border-color:transparent;background:none;color:var(--muted)}
+.ce.todo[style] .ck{border-color:var(--pc);border-width:3px}
+.hh-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:var(--chip);border-radius:var(--pill);padding:8px 12px;margin:0 0 12px;font:500 13px var(--sans);color:var(--ink);cursor:pointer;text-align:left}
+.hh-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.hh-btn .avs{display:flex}
+.hh-btn .avs .av{margin-right:-6px;box-shadow:0 0 0 2px var(--chip)}
+.hh-btn .avs + *{margin-left:6px}
+.people-panel{max-width:620px}
+.plist{margin-top:12px}
+.prow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.prow .pname{flex:1 1 140px;min-width:0}
+.swatches{display:flex;gap:7px;flex-wrap:wrap}
+.sw-c{width:28px;height:28px;border-radius:50%;background:var(--c);border:3px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+.sw-c.on{box-shadow:0 0 0 2px var(--ink)}
