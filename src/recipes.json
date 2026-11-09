@@ -1524,5 +1524,42 @@
    "Move the chestnuts to a baking dish, pour the sauce over, and bake 10–15 minutes more, until glazed and bubbling.",
    "Serve warm, right from the dish."
   ]
+ },
+ "CroissantBake": {
+  "title": "Croissant Ham & Cheese Egg Bake",
+  "note": "Buttery croissants soaked overnight in custard with ham and Gruyère. Assemble the night before, bake while the coffee brews.",
+  "meta": [
+   "Serves: 10–12",
+   "Prep: 20 min + overnight",
+   "Bake: 45–55 min",
+   "Oven: 350°F"
+  ],
+  "ingredients": [
+   "Butter, for the dish",
+   "8 large croissants, a day old, torn into 2-inch pieces (about 8 cups)",
+   "12 oz ham, diced (deli ham or leftover holiday ham)",
+   "2 cups Gruyère, shredded (8 oz), divided",
+   "1 cup sharp white cheddar, shredded (4 oz)",
+   "4 green onions, thinly sliced",
+   "## Custard",
+   "10 large eggs",
+   "2 1/2 cups whole milk",
+   "1/2 cup heavy cream",
+   "2 tbsp Dijon mustard",
+   "1 tsp kosher salt",
+   "1/2 tsp black pepper",
+   "1/4 tsp ground nutmeg",
+   "## To finish",
+   "Fresh chives, chopped"
+  ],
+  "steps": [
+   "Butter a 9×13 baking dish.",
+   "Scatter half the croissant pieces in the dish. Top with half the ham, half the cheddar, 1/2 cup of the Gruyère and half the green onions. Repeat with the rest of the croissants, ham, cheddar and green onions. Save the remaining 1 cup Gruyère for the top.",
+   "Whisk the eggs, milk, cream, Dijon, salt, pepper and nutmeg until smooth. Pour evenly over the dish, then press the croissants down gently so every piece soaks.",
+   "Cover tightly and refrigerate overnight, 8 to 12 hours.",
+   "In the morning, take the dish out 30 minutes before baking and heat the oven to 350°F. Scatter the remaining Gruyère over the top.",
+   "Bake uncovered 45 to 55 minutes, until puffed and golden and the center is set: a knife in the middle comes out clean, or it reads 160°F. If the top browns too fast, tent loosely with foil.",
+   "Rest 10 minutes, finish with chives, and cut into squares."
+  ]
  }
 }
