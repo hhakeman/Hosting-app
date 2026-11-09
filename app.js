@@ -125,7 +125,7 @@ function editTask(id){ const x = S.tasks.find(t => t.id === id); if (!x) return;
       <div class="erow"><label>Day<input type="date" id="et-date" value="${esc(x.date || "")}"></label><label>Time<input type="text" id="et-time" value="${esc(x.time || "")}" placeholder="Optional, e.g. 9:00 AM"></label></div>
       <div class="erow"><label>Kind<select id="et-cat">${CATS.map(([k,l]) => `<option value="${k}" ${(x.cat||"food")===k?"selected":""}>${l}</option>`).join("")}</select></label>${evs.length > 1 ? `<label>For<select id="et-ev">${evs.map(e => `<option value="${e.id}" ${e.id===x.eventId?"selected":""}>${esc(e.short || e.name)}</option>`).join("")}</select></label>` : ""}</div>
       ${whoPick(x.who)}
-      <div class="inline eacts"><button class="btn">Save</button><button type="button" class="btn quiet" data-act="close">Cancel</button><button type="button" class="btn quiet danger" data-act="edel">${U.armed === "edel" ? "Really delete?" : "Delete"}</button></div>
+      <div class="inline eacts"><button class="btn">Save</button><button type="button" class="btn quiet" data-act="close">Cancel</button><button type="button" class="btn danger-o" data-act="edel">Delete</button></div>
     </form></div></div>`;
   const f = $("#et-title"); if (f && matchMedia("(pointer:fine)").matches) f.focus(); }
 function editItem(id){ const x = S.items.find(i => i.id === id); if (!x) return; U.edit = {col:"items", id, who:x.who || ""};
@@ -135,7 +135,7 @@ function editItem(id){ const x = S.items.find(i => i.id === id); if (!x) return;
       <label>Note<input type="text" id="ei-note" value="${esc(x.note || "")}" placeholder="Optional"></label>
       <label>List<select id="ei-list">${sortedLists().map(l => `<option value="${l.id}" ${l.id===x.listId?"selected":""}>${esc(l.name)}</option>`).join("")}</select></label>
       ${whoPick(x.who)}
-      <div class="inline eacts"><button class="btn">Save</button><button type="button" class="btn quiet" data-act="close">Cancel</button><button type="button" class="btn quiet danger" data-act="edel">${U.armed === "edel" ? "Really delete?" : "Delete"}</button></div>
+      <div class="inline eacts"><button class="btn">Save</button><button type="button" class="btn quiet" data-act="close">Cancel</button><button type="button" class="btn danger-o" data-act="edel">Delete</button></div>
     </form></div></div>`; }
 /* Quick add for one day, from the + on a calendar day or a day heading. A to-do can belong to a hosting event or to no event (a household to-do). */
 function addSheet(d, kind, hostDefault){
@@ -155,6 +155,19 @@ function addSheet(d, kind, hostDefault){
     </form></div></div>`;
   const f = $("#da-text"); if (f) f.focus();
 }
+function editPlan(id, day){ const p = S.plans.find(x => x.id === id); if (!p) return; U.edit = {col:"plans", id, who:"", day: day || ""};
+  const wk = repeats(p), dname = fmt(p.date,{weekday:"long"});
+  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel edit-panel" role="dialog" aria-modal="true" aria-label="Edit plan"><div class="top-actions"><button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>Edit plan</h3>
+    <p class="note" style="font-size:14px;margin-top:6px">${wk ? `Every ${dname}${p.time ? " · " + esc(p.time) : ""}` : `${fmt(p.date,{weekday:"long",month:"long",day:"numeric"})}${p.time ? " · " + esc(p.time) : ""}`}</p>
+    <form class="eform" data-form="planedit" data-id="${p.id}">
+      <label>What<input type="text" id="ep-title" value="${esc(p.title)}" required></label>
+      <div class="erow"><label>${wk ? "Starts" : "Day"}<input type="date" id="ep-date" value="${esc(p.date)}"></label>${wk ? "" : `<label>Ends (optional)<input type="date" id="ep-end" value="${esc(p.endDate || "")}"></label>`}<label>Time<input type="text" id="ep-time" value="${esc(p.time || "")}" placeholder="Optional"></label></div>
+      <label>Note<input type="text" id="ep-note" value="${esc(p.note || "")}" placeholder="Optional"></label>
+      <label class="chk"><input type="checkbox" id="ep-weekly" ${wk ? "checked" : ""}> Repeats every week</label>
+      <div class="inline eacts"><button class="btn">Save</button><button type="button" class="btn quiet" data-act="close">Cancel</button>
+        ${wk && day ? `<button type="button" class="btn ghost" data-act="pskip">Skip ${fmt(day,{month:"short",day:"numeric"})} only</button>` : ""}
+        <button type="button" class="btn danger-o" data-act="edel">${wk ? "Delete every week" : "Delete"}</button></div>
+    </form></div></div>`; }
 function renderPeople(){
   if (!U.peopleOpen) return; const ps = people(), used = ps.map(p => p.color);
   $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel people-panel" role="dialog" aria-modal="true" aria-label="The household"><div class="top-actions"><button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>The household</h3>
@@ -418,7 +431,7 @@ document.addEventListener("click", e => { const b = e.target.closest('[data-act=
 function planRow(p){ const nx = repeats(p) ? nextOcc(p) : p.date, d = nx ? daysTo(nx) : -1, multi = !repeats(p) && p.endDate && p.endDate !== p.date;
   const when = repeats(p) ? `Every ${fmt(p.date,{weekday:"long"})}${p.time ? " · " + esc(p.time) : ""}${nx ? ` · next ${d===0?"today":d===1?"tomorrow":fmt(nx,{month:"short",day:"numeric"})}` : " · ended"}`
     : `${d===0?"Today":d===1?"Tomorrow":d<0?"Started "+fmt(p.date):fmt(p.date,{weekday:"long",month:"short",day:"numeric"})}${multi ? " – " + fmt(p.endDate,{month:"short",day:"numeric"}) : ""}${p.time ? " · " + esc(p.time) : ""}`;
-  return `<div class="sw" data-col="plans" data-id="${p.id}"><div class="row plan"><span class="dot"></span><div class="main"><div class="t">${esc(p.title)}</div><div class="s">${when}${p.note ? " · " + esc(p.note) : ""}</div></div>${d > 1 && d <= 14 ? `<span class="pill">in ${d} days</span>` : ""}${del("plans", p.id)}</div><button class="sw-del" data-act="swdel" data-col="plans" data-id="${p.id}" tabindex="-1">Delete</button></div>`; }
+  return `<div class="sw" data-col="plans" data-id="${p.id}"><div class="row plan"><span class="dot"></span><div class="main tapedit" data-act="editplan" data-id="${p.id}"><div class="t">${esc(p.title)}</div><div class="s">${when}${p.note ? " · " + esc(p.note) : ""}</div></div>${d > 1 && d <= 14 ? `<span class="pill">in ${d} days</span>` : ""}${del("plans", p.id)}</div><button class="sw-del" data-act="swdel" data-col="plans" data-id="${p.id}" tabindex="-1">Delete</button></div>`; }
 function vPlans(){
   const t = todayISO(), key = p => repeats(p) ? (nextOcc(p) || p.until || p.date) : p.date, all = S.plans.slice().sort((a,b) => key(a).localeCompare(key(b)) || (a.time||"").localeCompare(b.time||""));
   const live = p => repeats(p) ? !!nextOcc(p) : (p.endDate || p.date) >= t;
@@ -535,14 +548,14 @@ const ci = k => `<svg viewBox="0 0 24 24" aria-hidden="true" class="ci">${CALI[k
 function dayItems(d, compact){
   const t = todayISO(), m = S.dinners[d], mt = meetingsOn(d), out = [], hol = holidayOn(d);
   if (hol) out.push(`<div class="ce hol">${ci("star")}${esc(hol)}</div>`);
-  plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="view" data-id="plans" ${repeats(p) ? "" : `data-drag="plan" data-drag-id="${p.id}" data-drag-from="${d}"`} title="${esc(p.title)}${repeats(p) ? " (every week)" : ""}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
+  plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="editplan" data-id="${p.id}" data-day="${d}" ${repeats(p) ? "" : `data-drag="plan" data-drag-id="${p.id}" data-drag-from="${d}"`} title="${esc(p.title)}${repeats(p) ? " (every week)" : ""}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
   evsOn(d).forEach(e => out.push(`<button class="ce host" data-act="gohost" data-id="${esc(wkKey(e))}">${ci("host")}${esc(e.short || e.name)}${e.time && !compact ? `<span>${esc(e.time)}</span>` : ""}</button>`));
   if (mt) mt.allDay.forEach(e => out.push(`<div class="ce meet all">${esc(e.subject || "All day")}</div>`));
   if (m && m.title) out.push(`<button class="ce dinner" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}" data-drag="dinner" data-drag-id="${d}" data-drag-from="${d}">${ci("dinner")}${esc(m.title)}</button>`);
   if (mt) mt.timed.forEach(x => { const href = safeUrl(x.e.webLink), inner = `<b>${calTime(x.s)}</b> ${esc(x.e.subject || "(No title)")}`;
     out.push(href ? `<a class="ce meet" href="${esc(href)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="ce meet">${inner}</div>`); });
   const tk = tasksOn(d).filter(whoMatch), nDone = tk.filter(x => x.done).length;
-  tk.filter(x => !x.done).forEach(x => { const p = personOf(x.who); out.push(`<div class="ce todo ${d < t ? "late" : ""}" data-drag="task" data-drag-id="${x.id}" data-drag-from="${d}" ${p ? `style="--pc:${pColor(p)}"` : ""}>${ck(false, "task", x.id, x.title)}<span class="tapedit" data-act="edittask" data-id="${x.id}">${x.cat === "freezer" ? ci("fz") : ""}${esc(x.title)}</span></div>`); });
+  tk.filter(x => !x.done).forEach(x => { const p = personOf(x.who); out.push(`<div class="ce todo ${d < t ? "late" : ""}" data-act="edittask" data-id="${x.id}" data-drag="task" data-drag-id="${x.id}" data-drag-from="${d}" ${p ? `style="--pc:${pColor(p)}"` : ""}>${ck(false, "task", x.id, x.title)}<span class="tapedit" data-act="edittask" data-id="${x.id}">${x.cat === "freezer" ? ci("fz") : ""}${esc(x.title)}</span></div>`); });
   if (nDone && !compact) out.push(`<button class="ce donecount" data-act="calday" data-id="${d}">${CHECK}${nDone} done</button>`);
   return out;
 }
@@ -997,9 +1010,11 @@ document.addEventListener("click", async ev => {
     case "caladd": U.edit = null; U.add = null; addSheet(id, b.dataset.kind, b.dataset.ev === "auto"); return;
     case "addkind": if (U.add) { const sel = $("#da-ev"); if (sel) U.add.ev = sel.value; addSheet(U.add.d, id); } return;
     case "edititem": U.armed = null; editItem(id); return;
+    case "editplan": U.armed = null; U.add = null; editPlan(id, b.dataset.day); return;
+    case "pskip": if (U.edit && U.edit.col === "plans" && U.edit.day) { const p = S.plans.find(x => x.id === U.edit.id); if (p) await w("plans", p.id, {skip:[...(p.skip || []), U.edit.day]}); toast(`Skipped ${fmt(U.edit.day,{weekday:"long",month:"short",day:"numeric"})}`); U.edit = null; $("#overlay").innerHTML = ""; } break;
     case "epick": if (U.add && !U.edit) { U.add.who = id; b.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === b))); return; } if (U.edit) { U.edit.who = id; b.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === b))); } return;
     case "movetask": if (U.edit) { await w("tasks", U.edit.id, {date:id}); U.edit = null; $("#overlay").innerHTML = ""; toast(`Moved to ${daysTo(id)===0 ? "today" : daysTo(id)===1 ? "tomorrow" : fmt(id,{weekday:"long",month:"short",day:"numeric"})}`); } break;
-    case "edel": if (!U.edit) return; if (U.armed === "edel") { U.armed = null; await w(U.edit.col, U.edit.id, null, "delete"); U.edit = null; $("#overlay").innerHTML = ""; toast("Deleted"); break; } U.armed = "edel"; b.textContent = "Really delete?"; return;
+    case "edel": if (!U.edit) return; if (U.armed === "edel") { U.armed = null; await w(U.edit.col, U.edit.id, null, "delete"); U.edit = null; $("#overlay").innerHTML = ""; toast("Deleted"); break; } U.armed = "edel"; b.textContent = "Tap again to delete"; b.classList.add("armed"); return;
     case "golist": U.view = "lists"; U.listId = id; ls.set("hph_view","lists"); ls.set("hph_list", id); break;
     case "gohost": U.view = "hosting"; U.wk = id; U.sub = "all"; ls.set("hph_view","hosting"); ls.set("hph_wk", id); break;
     case "list": U.listId = id; U.editList = false; U.pickIdea = null; ls.set("hph_list", id); break;
@@ -1075,6 +1090,8 @@ document.addEventListener("submit", async e => {
     else if (k === "plan") await add("plans", {title:text, date:d, endDate:"", time:tm, note:"", ...($("#da-weekly") && $("#da-weekly").checked ? {repeat:"weekly"} : {}), createdAt:Date.now()});
     else await add("tasks", {eventId:v("#da-ev"), title:text, date:d, time:tm, t:to24(tm), cat:v("#da-cat") || "house", detail:"", recipe:recipeFor(text), who:U.add.who || "", done:false});
     toast(`Added to ${daysTo(d)===0 ? "today" : daysTo(d)===1 ? "tomorrow" : fmt(d,{weekday:"long"})}`); U.add = null; $("#overlay").innerHTML = ""; render(); return; }
+  if (f === "planedit" && v("#ep-title")) { const weekly = $("#ep-weekly").checked, d0 = v("#ep-date"), end = $("#ep-end") ? v("#ep-end") : "";
+    await w("plans", e.target.dataset.id, {title:v("#ep-title"), date:d0, endDate: !weekly && end && end > d0 ? end : "", time:v("#ep-time"), note:v("#ep-note"), repeat: weekly ? "weekly" : ""}); U.edit = null; $("#overlay").innerHTML = ""; toast("Saved"); render(); return; }
   if (f === "taskedit" && v("#et-title")) { const tm = v("#et-time"), d = {title:v("#et-title"), detail:v("#et-detail"), date:v("#et-date"), time:tm, t:to24(tm), cat:v("#et-cat"), who:(U.edit && U.edit.who) || ""}; if ($("#et-ev")) d.eventId = v("#et-ev");
     await w("tasks", e.target.dataset.id, d); U.edit = null; $("#overlay").innerHTML = ""; toast("Saved"); render(); return; }
   if (f === "itemedit" && v("#ei-text")) { const L = v("#ei-list"), x = S.items.find(i => i.id === e.target.dataset.id), moved = x && x.listId !== L;
