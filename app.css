@@ -657,3 +657,25 @@ body.dragging,body.dragging *{cursor:grabbing!important}
 .btn.danger-o{background:none;border:1.5px solid var(--warn);color:var(--warn);margin-left:auto}
 .btn.danger-o.armed{background:var(--warn);color:#fff}
 .edit-panel .eacts{flex-wrap:wrap}
+
+/* Meal ideas grid */
+.ideas-panel{margin-top:28px}
+.ideas-head{flex-wrap:wrap}
+.mh{margin:0;font-family:var(--display);font-weight:500;font-size:30px;color:var(--clay)}
+.mh span{font:500 14px var(--sans);color:var(--muted);margin-left:6px}
+.ideas-head .btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;vertical-align:-3px;margin-right:4px}
+.ifilters{display:flex;flex-direction:column;gap:2px;margin:6px 0 14px}
+.frow{display:flex;align-items:center;gap:12px;min-width:0}
+.flabel{flex:0 0 70px;font:500 11px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.frow .chips{flex:1 1 auto;min-width:0;padding:4px 0}
+.frow .chip{min-height:36px;padding:6px 14px;font-size:13.5px}
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.icard{--ic:var(--clay);--is:var(--clay-soft);text-align:left;background:var(--raised);border:1px solid var(--line);border-top:5px solid var(--ic);border-radius:16px;padding:14px 16px 16px;cursor:pointer;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:7px;min-height:132px}
+.icard:hover{box-shadow:var(--shadow)}
+.icard.p-gold{--ic:var(--gold);--is:var(--gold-soft)}.icard.p-clay{--ic:var(--clay);--is:var(--clay-soft)}.icard.p-berry{--ic:var(--berry);--is:var(--berry-soft)}.icard.p-blue{--ic:var(--blue);--is:var(--blue-soft)}.icard.p-green{--ic:var(--green);--is:var(--green-soft)}
+.icard .itop{display:flex;gap:6px;flex-wrap:wrap;min-height:20px}
+.iprot{font:500 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;background:var(--is);color:var(--ic);border-radius:var(--pill);padding:2px 9px}
+.ifew{font:500 11px var(--sans);background:var(--teal-soft);color:var(--teal);border-radius:var(--pill);padding:2px 9px}
+.icard b{font-family:var(--display);font-size:21px;font-weight:500;line-height:1.1}
+.icard .imeta{margin-top:auto;font-size:12.5px;color:var(--muted)}
+@media (max-width:760px){.frow{flex-direction:column;align-items:flex-start;gap:0}.flabel{flex:none;padding-top:6px}.frow .chips{width:100%}.igrid{grid-template-columns:1fr 1fr;gap:10px}.icard b{font-size:18px}}

@@ -133,6 +133,7 @@ function editItem(id){ const x = S.items.find(i => i.id === id); if (!x) return;
     <form class="eform" data-form="itemedit" data-id="${x.id}">
       <label>Item<input type="text" id="ei-text" value="${esc(x.text)}" required></label>
       <label>Note<input type="text" id="ei-note" value="${esc(x.note || "")}" placeholder="Optional"></label>
+      ${isIdeasList(S.lists.find(l => l.id === x.listId)) ? `<div class="erow"><label>Time<input type="text" id="ei-time" value="${esc(x.time || "")}" placeholder="e.g. 30 min"></label><label>Link<input type="text" id="ei-link" value="${esc(x.link || "")}" placeholder="Pinterest or recipe site"></label></div><label>Tags<input type="text" id="ei-tags" value="${esc((x.tags || []).join(", "))}" placeholder="e.g. crockpot, chicken, kid friendly"></label>` : ""}
       <label>List<select id="ei-list">${sortedLists().map(l => `<option value="${l.id}" ${l.id===x.listId?"selected":""}>${esc(l.name)}</option>`).join("")}</select></label>
       ${whoPick(x.who)}
       <div class="inline eacts"><button class="btn">Save</button><button type="button" class="btn quiet" data-act="close">Cancel</button><button type="button" class="btn danger-o" data-act="edel">Delete</button></div>
@@ -200,21 +201,25 @@ function recipeObj(o, src){ if (!o) return null;
 const recipeFromRef = ref => { const [kind, ...rest] = String(ref||"").split(":"); const id = rest.join(":");
   if (kind === "dinner") return recipeObj(S.dinners[id], ref); if (kind === "item") return recipeObj(S.items.find(i => i.id === id), ref); return R[kind] ? {...R[kind], key:kind, src:"cb:"+kind} : (R[id] ? {...R[id], key:id, src:"cb:"+id} : null); };
 /* Meal idea tags: derived from the recipe's own words and time, plus any tags typed on the idea. */
-const TAGS = [["quick","Under 30 min"],["hour","Under an hour"],["crockpot","Crockpot"],["instantpot","Instant Pot"],["sheetpan","Sheet pan"],["onepot","One pot"],["airfryer","Air fryer"],["grill","Grill"],["chicken","Chicken"],["beef","Beef"],["pork","Pork"],["seafood","Seafood"],["veg","Vegetarian"],["soup","Soup"],["pasta","Pasta"],["tacos","Tacos"],["salad","Salad"],["family","Family cookbook"],["few","5 ingredients"]];
+const TAGS = [["quick","Under 30 min"],["hour","Under an hour"],["crockpot","Crockpot"],["instantpot","Instant Pot"],["sheetpan","Sheet pan"],["onepot","One pot"],["airfryer","Air fryer"],["grill","Grill"],["chicken","Chicken"],["beef","Beef"],["pork","Pork"],["seafood","Seafood"],["veg","Vegetarian"],["soup","Soup"],["pasta","Pasta"],["tacos","Tacos"],["salad","Salad"],["family","Family cookbook"],["few","5 ingredients"],["slow","Low and slow"]];
+/* Meal idea filter groups, one choice per group. */
+const IGROUPS = [["time","Time",["quick","hour","slow"]],["protein","Protein",["chicken","beef","pork","seafood","veg"]],["method","Method",["crockpot","sheetpan","onepot","instantpot","airfryer","grill"]],["type","Type",["few","soup","pasta","tacos","salad","family"]]];
+const isIdeasList = l => l && (l.id === "ideas" || /idea/i.test(l.name || ""));
 const TAG_LABEL = Object.fromEntries(TAGS);
 const minutesOf = t => { let total = 0, any = false; const re = /(\d+(?:\.\d+)?)(?:\s*(?:[–-]|to)\s*(\d+(?:\.\d+)?))?\s*(h(?:ou)?rs?|min(?:ute)?s?)/gi; let m;
   while ((m = re.exec(String(t||"")))) { any = true; const n = +(m[2] || m[1]); total += /^h/i.test(m[3]) ? n*60 : n; } return any ? total : null; };
 const MEAT = /\b(chicken|beef|steak|pork|bacon|sausage|ham|turkey|lamb|shrimp|salmon|fish|crab|tuna|cod|pollock|scallop|lobster|clam|mussel|trout|chorizo|prosciutto|pepperoni|meatball|ground (?:beef|turkey|pork)|brisket|ribs?|duck|venison|rabbit|anchov)/i;
 function ideaTags(i){
   const rk = i.recipe && R[i.recipe] ? i.recipe : "", r = rk ? R[rk] : null;
-  const text = [i.text, i.note, ...(i.ingredients || r && r.ingredients || []), ...(i.steps || r && r.steps || [])].join(" \n ");
+  const text = [i.text, i.note, ...(i.ingredients || r && r.ingredients || []), ...(i.steps || r && r.steps || [])].join(" \n ").replace(/\b(chicken|beef|turkey|vegetable|veggie|bone)\s+(broth|stock|bouillon|base|gravy)\b/gi, "$2");
   const tags = new Set((i.tags || []).map(x => norm(x).replace(/ /g,"")));
+  const PROT = ["chicken","beef","pork","seafood","veg"], setProt = PROT.some(k => tags.has(k));
   const mins = minutesOf(i.time || (rk && recipeTime(rk)) || "");
-  if (mins != null && mins <= 30) tags.add("quick"); if (mins != null && mins <= 60) tags.add("hour");
+  if (mins != null && mins <= 30) tags.add("quick"); if (mins != null && mins <= 60) tags.add("hour"); if ((mins != null && mins >= 120) || /crock[ -]?pot|slow[ -]cook/i.test(text)) tags.add("slow");
   if (/crock[ -]?pot|slow[ -]cook/i.test(text)) tags.add("crockpot"); if (/instant[ -]?pot|pressure cook/i.test(text)) tags.add("instantpot");
   if (/sheet[ -]?pan/i.test(text)) tags.add("sheetpan"); if (/\bone[ -](?:pot|pan|skillet)|skillet dinner/i.test(text)) tags.add("onepot"); if (/air[ -]?fry/i.test(text)) tags.add("airfryer"); if (/\bgrill/i.test(text)) tags.add("grill");
-  if (/\bchicken\b/i.test(text)) tags.add("chicken"); if (/\b(beef|steak|brisket|meatball|ground beef|pot roast|chuck)\b/i.test(text)) tags.add("beef"); if (/\b(pork|bacon|sausage|ham|chorizo|prosciutto|ribs?)\b/i.test(text)) tags.add("pork");
-  if (/\b(shrimp|salmon|fish|crab|tuna|cod|pollock|scallop|lobster|clam|mussel|trout|seafood)\b/i.test(text)) tags.add("seafood"); if (!MEAT.test(text) && text.trim().length > 12) tags.add("veg");
+  if (!setProt && /\bchicken\b/i.test(text)) tags.add("chicken"); if (!setProt && /\b(beef|steak|brisket|meatball|ground beef|pot roast|chuck)\b/i.test(text)) tags.add("beef"); if (!setProt && /\b(pork|bacon|sausage|ham|chorizo|prosciutto|ribs?|kielbasa)\b/i.test(text)) tags.add("pork");
+  if (!setProt && /\b(shrimp|salmon|fish|crab|tuna|cod|pollock|scallop|lobster|clam|mussel|trout|seafood)\b/i.test(text)) tags.add("seafood"); if (!setProt && !MEAT.test(text) && text.trim().length > 12) tags.add("veg");
   if (/\b(soup|chili|stew|chowder)\b/i.test(text)) tags.add("soup"); if (/\b(pasta|spaghetti|penne|tortellini|lasagna|orzo|mac and cheese|noodle|gnocchi|rigatoni|fettuccine|linguine)\b/i.test(text)) tags.add("pasta");
   if (/\btacos?\b|\bburrito|\bquesadilla|\benchilada/i.test(text)) tags.add("tacos"); if (/\bsalad\b/i.test(text)) tags.add("salad"); if (rk) tags.add("family");
   return [...tags].filter(t => TAG_LABEL[t]);
@@ -227,7 +232,7 @@ const recipeOptions = sel => `<option value="">From the cookbook (optional)</opt
 
 /* ───────────────────────── Render shell ───────────────────────── */
 function render(){
-  const counts = {lists: S.items.filter(i => !i.done).length, hosting: S.tasks.filter(t => !t.done && daysTo(t.date||todayISO()) <= 7).length};
+  const ideaIds = S.lists.filter(isIdeasList).map(l => l.id), counts = {lists: S.items.filter(i => !i.done && !ideaIds.includes(i.listId)).length, hosting: S.tasks.filter(t => !t.done && daysTo(t.date||todayISO()) <= 7).length};
   setHTML($("#nav"), VIEWS.map(([k,l]) => `<button class="nav-item nav-${k}" role="tab" aria-selected="${U.view===k || (k==="meals" && (U.view==="dinners" || U.view==="cookbook")) || (k==="today" && U.view==="plans")}" data-act="view" data-id="${k}">${svg(k)}<span>${l}</span>${counts[k] ? `<span class="n">${counts[k]}</span>` : ""}</button>`).join(""));
   $("#railfoot").innerHTML = `${ready && db ? `<button class="hh-btn" data-act="people" aria-label="The household">${people().length ? `<span class="avs">${people().map(p => avatar(p, "sm")).join("")}</span>Household` : `${svg("person")}Add the household`}</button>` : ""}${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}<br>${ready ? (db ? "Shared with the household" : "Not signed in") : "Loading…"}`;
   const key = [U.view, U.listId, U.wk, U.sub, U.htab, U.weekOff, U.calMode, U.calOff].join("|");
@@ -253,7 +258,7 @@ function vToday(){
   const lists = sortedLists();
   const hcards = hostWks().slice(0,1).map(x => { const o = hostTasks(x.k).filter(t => !t.done).sort(byDay), wkO = o.filter(t => t.date && daysTo(t.date) <= 7);
     return `<button class="lcard host" data-act="golist" data-id="${HOST}${x.k}"><p class="eyebrow">${esc(hostName(x.k))} to-dos</p><div class="big ${o.length?"":"faint"}">${wkO.length}<small>this week</small></div><div class="peek">${o.length ? esc(o.slice(0,3).map(t => t.title).join(" · ")) : "All clear"}</div></button>`; }).join("");
-  const lcards = lists.length || hcards ? `<div class="grid c4">${hcards}${lists.slice(0, hcards ? 7 : 8).map(l => { const o = openItems(l.id); return `<button class="lcard" data-act="golist" data-id="${l.id}"><p class="eyebrow">${esc(l.name)}</p><div class="big ${o.length?"":"faint"}" ${o.length?"":'style="color:var(--faint)"'}>${o.length}</div><div class="peek">${o.length ? esc(o.slice(0,3).map(i => i.text).join(" · ")) : "All clear"}</div></button>`; }).join("")}</div>` : `<div class="empty"><b>No lists yet</b>Open Lists to make the first one, or say "add milk to grocery".</div>`;
+  const lcards = lists.length || hcards ? `<div class="grid c4">${hcards}${lists.filter(l => !isIdeasList(l)).slice(0, hcards ? 7 : 8).map(l => { const o = openItems(l.id); return `<button class="lcard" data-act="golist" data-id="${l.id}"><p class="eyebrow">${esc(l.name)}</p><div class="big ${o.length?"":"faint"}" ${o.length?"":'style="color:var(--faint)"'}>${o.length}</div><div class="peek">${o.length ? esc(o.slice(0,3).map(i => i.text).join(" · ")) : "All clear"}</div></button>`; }).join("")}</div>` : `<div class="empty"><b>No lists yet</b>Open Lists to make the first one, or say "add milk to grocery".</div>`;
   const ev = nextEvent(); let host = `<div class="empty"><b>No events planned</b>Open Hosting to add the first one.</div>`;
   if (ev) { const evs = S.events.filter(e => wkKey(e) === wkKey(ev)), ids = evs.map(e => e.id), tasks = S.tasks.filter(x => ids.includes(x.eventId)), done = tasks.filter(x => x.done).length, g = S.guests.filter(x => x.eventId === ev.id), yes = g.filter(x => x.rsvp === "yes").length, n = daysTo(ev.date);
     host = `<button class="card tap" data-act="gohost" data-id="${wkKey(ev)}"><div class="host-card"><div><p class="eyebrow">Up next</p><div class="name">${esc(ev.name)}</div><div class="when">${fmt(ev.date,{weekday:"long",month:"long",day:"numeric"})}${ev.time ? " · " + esc(ev.time) : ""}</div>${ev.theme ? `<div class="sum-th">${esc(ev.theme)}</div>` : ""}</div><div class="count"><b>${n < 0 ? "Done" : n}</b><span>${n < 0 ? "" : n === 1 ? "day to go" : "days to go"}</span></div></div>
@@ -447,12 +452,12 @@ function vPlans(){
 
 /* ───────────────────────── Lists ───────────────────────── */
 function vLists(){
-  const lists = sortedLists(), hws = hostWks();
+  const lists = sortedLists().filter(l => !isIdeasList(l)), hws = hostWks();
   const isHost = String(U.listId||"").startsWith(HOST) && hws.some(x => HOST + x.k === U.listId);
   if (!isHost && !lists.find(l => l.id === U.listId)) U.listId = hws[0] ? HOST + hws[0].k : lists[0] ? lists[0].id : null;
   const index = `<div class="list-index">${hws.map(x => `<button class="host" aria-pressed="${HOST+x.k===U.listId}" data-act="list" data-id="${HOST}${x.k}">${svg("hosting")}${esc(hostName(x.k))}<span class="n">${hostTasks(x.k).filter(t => !t.done).length || ""}</span></button>`).join("")}${hws.length ? `<div class="sep" aria-hidden="true"></div>` : ""}${lists.map(l => `<button aria-pressed="${l.id===U.listId}" data-act="list" data-id="${l.id}">${esc(l.name)}<span class="n">${openItems(l.id).length || ""}</span></button>`).join("")}
     <form class="newlist" data-form="list"><input type="text" id="nl" placeholder="New list…" aria-label="New list name"></form></div>`;
-  const head = `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done).length} open across ${lists.length} lists</div></div>`;
+  const head = `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done && lists.some(l => l.id === i.listId)).length} open across ${lists.length} lists</div></div>`;
   if (String(U.listId||"").startsWith(HOST)) return `${head}<div class="lists-layout">${index}<div>${vHostList(U.listId.slice(HOST.length))}</div></div>`;
   if (!U.listId) return `<div class="ph"><h1>Lists</h1></div><div class="lists-layout">${index}<div class="empty"><b>Make your first list</b>Grocery, Costco, to-do, anything. Type a name on the left.</div></div>`;
   const L = S.lists.find(l => l.id === U.listId), items = listItems(L.id), isIdeas = L.id === "ideas" || /idea/i.test(L.name);
@@ -469,7 +474,7 @@ function vLists(){
     ${isIdeas ? tagChips(allOpen) : ""}
     <div class="card soft">${open.length ? `<div class="list">${open.map(row).join("")}</div>` : `<div class="empty"><b>${isIdeas ? (allOpen.length ? "Nothing matches those filters" : "No ideas saved") : "All clear"}</b>${isIdeas ? (allOpen.length ? "Tap All to clear them." : "Jot down dinners you want to make. Plan one into the week with a tap.") : "Add something above, or say it out loud."}</div>`}</div>
     ${done.length ? `<details class="checked" ${U.editList?"open":""}><summary>Checked off (${done.length})</summary><div class="card soft"><div class="list">${done.map(row).join("")}</div></div></details>` : ""}`;
-  return `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done).length} open across ${lists.length} lists</div></div><div class="lists-layout">${index}<div>${main}</div></div>`;
+  return `<div class="ph"><h1>Lists</h1><div class="sub">${S.items.filter(i => !i.done && lists.some(l => l.id === i.listId)).length} open across ${lists.length} lists</div></div><div class="lists-layout">${index}<div>${main}</div></div>`;
 }
 
 /* A holiday weekend's hosting to-dos as a list: grouped by day, filter by kind, quick add with a date. Same tasks as Hosting > Checklist. */
@@ -500,6 +505,25 @@ function vHostList(k){
 }
 
 /* ───────────────────────── Meals: the week's dinners and the cookbook, one tab ───────────────────────── */
+/* Meal ideas as cards with filter rows (time, protein, method, type). Tap a card for the recipe and a night to put it on. */
+const PROT_CLS = {chicken:"gold", beef:"clay", pork:"berry", seafood:"blue", veg:"green"};
+function ideasGrid(L, all, days){
+  const F = U.ideaF || (U.ideaF = {}), match = i => { const tg = ideaTags(i); return IGROUPS.every(([g]) => !F[g] || tg.includes(F[g])); };
+  const shown = all.filter(match).sort((a,b) => (a.text||"").localeCompare(b.text||""));
+  const count = (g, k) => all.filter(i => { const tg = ideaTags(i); return tg.includes(k) && IGROUPS.every(([g2]) => g2 === g || !F[g2] || tg.includes(F[g2])); }).length;
+  const rows = IGROUPS.map(([g, label, keys]) => { const opts = keys.filter(k => count(g, k) || F[g] === k); if (!opts.length) return "";
+    return `<div class="frow"><span class="flabel">${label}</span><div class="chips">${[["", "Any"], ...opts.map(k => [k, TAG_LABEL[k]])].map(([k, l]) => `<button class="chip" aria-pressed="${(F[g]||"") === k}" data-act="ifilter" data-g="${g}" data-id="${k}">${l}${k ? ` <span>${count(g, k)}</span>` : ""}</button>`).join("")}</div></div>`; }).join("");
+  const card = i => { const rk = i.recipe && R[i.recipe] ? i.recipe : recipeFor(i.text), tg = ideaTags(i), tm = shortTime(i.time, rk), prot = ["chicken","beef","pork","seafood","veg"].find(k => tg.includes(k));
+    const n = (i.ingredients || (rk && R[rk] && R[rk].ingredients) || []).filter(x => !/^##|^pantry:/i.test(x)).length;
+    const meth = ["crockpot","sheetpan","onepot","instantpot","airfryer","grill"].filter(k => tg.includes(k)).map(k => TAG_LABEL[k]);
+    return `<button class="icard ${prot ? "p-" + PROT_CLS[prot] : ""}" data-act="idearecipe" data-id="${i.id}"><span class="itop">${prot ? `<span class="iprot">${TAG_LABEL[prot]}</span>` : ""}${tg.includes("few") ? `<span class="ifew">5 ingredients</span>` : ""}</span><b>${esc(i.text)}</b><span class="imeta">${[tm, ...meth, n ? n + " ingredients" : "", safeUrl(i.link) && !hasContent(i) ? linkLabel(i.link) : ""].filter(Boolean).map(esc).join(" · ")}</span></button>`; };
+  const pick = U.pickIdea && all.find(i => i.id === U.pickIdea);
+  return `<div class="ideas-panel"><div class="ideas-head"><h2 class="mh">Meal ideas <span>${all.length}</span></h2><div class="inline" style="margin:0">${L && safeUrl(L.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(L.link))}" target="_blank" rel="noopener">${esc(linkLabel(L.link))} board ↗</a>` : ""}<button class="btn sm" data-act="ideaadd">${svg("plus")} Add an idea</button></div></div>
+    ${U.ideaAdd ? `<form class="add" data-form="ideanew" style="margin:0 0 12px"><input type="text" id="in-t" placeholder="Dinner idea" required autocomplete="off"><input type="text" id="in-tm" placeholder="Time, e.g. 30 min" style="flex:0 1 150px"><input type="text" id="in-l" placeholder="Link (Pinterest, recipe site)"><button class="btn">Add</button><button type="button" class="btn quiet" data-act="ideaadd">Cancel</button></form>` : ""}
+    <div class="ifilters">${rows}</div>
+    ${pick ? `<div class="nightpick"><p class="eyebrow">Put ${esc(pick.text)} on which night?</p><div class="daypick">${days.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(pick.text)}">${fmt(d,{weekday:"short",day:"numeric"})}</button>`).join("")}<button class="chip" data-act="plan" data-id="">Cancel</button></div></div>` : ""}
+    ${shown.length ? `<div class="igrid">${shown.map(card).join("")}</div>` : `<div class="empty">${all.length ? "Nothing matches those filters. Tap Any to loosen them." : "No ideas yet. Add one above, or say \"idea: lemon chicken\"."}</div>`}</div>`;
+}
 const mealsHead = sub => `<div class="ph"><div><h1>Meals</h1><div class="sub">${esc(sub)}</div></div><div class="seg" role="tablist" aria-label="Meals"><button aria-pressed="${U.view==="dinners"}" data-act="mtab" data-id="dinners">This week</button><button aria-pressed="${U.view==="cookbook"}" data-act="mtab" data-id="cookbook">Cookbook</button></div></div>`;
 function vDinners(){
   const t = todayISO(), start = addDays(weekStart(t), U.weekOff*7), days = [0,1,2,3,4,5,6].map(i => addDays(start,i));
@@ -513,8 +537,7 @@ function vDinners(){
       ${recipeObj(m) ? `<div class="inline">${(recipeObj(m).steps||[]).length ? `<button class="btn sm" data-act="cook" data-id="dinner:${d}">Cook it</button>` : ""}<button class="btn sm ghost" data-act="recipe" data-id="dinner:${d}">Recipe</button>${(recipeObj(m).ingredients||[]).length ? `<button class="btn sm ghost" data-act="togrocery" data-id="dinner:${d}">Add ingredients to Grocery</button>` : ""}${safeUrl(m.link) ? `<a class="btn sm ghost" href="${esc(safeUrl(m.link))}" target="_blank" rel="noopener">Open ${esc(linkLabel(m.link))} ↗</a>` : ""}</div>` : ""}</div>`; }
   const ideasList = S.lists.find(l => l.id === "ideas") || S.lists.find(l => /idea/i.test(l.name));
   const allIdeas = ideasList ? openItems(ideasList.id) : [], ideas = allIdeas.filter(ideaMatches);
-  const ideasHtml = `<div class="ideas-panel"><div class="ideas-head"><p class="eyebrow">Meal ideas</p>${ideasList && safeUrl(ideasList.link) ? `<a class="pill link ext" href="${esc(safeUrl(ideasList.link))}" target="_blank" rel="noopener" style="margin:0">${esc(linkLabel(ideasList.link))} board ↗</a>` : ""}</div>${tagChips(allIdeas)}${ideas.length ? `<div class="ideas">${ideas.map(i => { const tm = shortTime(i.time, i.recipe || recipeFor(i.text)); return `<button class="idea" aria-pressed="${U.pickIdea===i.id}" data-act="idearecipe" data-id="${i.id}"><span class="plus" aria-hidden="true">+</span><span class="idea-t">${esc(i.text)}${tm || ideaTags(i).length ? `<span>${esc([tm, ...ideaTags(i).filter(t => ["crockpot","instantpot","sheetpan","onepot","airfryer","grill"].includes(t)).map(t => TAG_LABEL[t])].filter(Boolean).join(" · "))}</span>` : ""}</span></button>`; }).join("")}</div>` : allIdeas.length ? `<p class="note">Nothing matches those filters.</p>` : `<p class="note">Save dinner ideas in the Meal ideas list, or say "idea: lemon chicken". They show up here to drop into the week.</p>`}
-    ${U.pickIdea && ideas.find(i => i.id === U.pickIdea) ? `<p class="note" style="margin-top:14px">Put <b>${esc(ideas.find(i => i.id === U.pickIdea).text)}</b> on which night?</p><div class="daypick">${days.map(d => `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(ideas.find(i => i.id === U.pickIdea).text)}">${fmt(d,{weekday:"short",day:"numeric"})}</button>`).join("")}</div>` : ""}</div>`;
+  const ideasHtml = ideasGrid(ideasList, allIdeas, days);
   return `${mealsHead("Plan the week on Sunday, shop once.")}${nav}${cards}${edit}${ideasHtml}`;
 }
 
@@ -780,7 +803,7 @@ function showRecipe(ref){
   const ideaId = /^item:/.test(src) ? src.slice(5) : "", idea = ideaId ? S.items.find(i => i.id === ideaId) : null;
   const nights = idea ? `<div class="nightpick"><p class="eyebrow">Put it on a night</p><div class="daypick">${[0,1,2,3,4,5,6].map(n => { const d = addDays(todayISO(), n), m = S.dinners[d]; return `<button class="chip" data-act="pickday" data-id="${d}" data-idea="${esc(idea.text)}" title="${m && m.title ? esc("Replaces " + m.title) : ""}">${n===0?"Tonight":n===1?"Tomorrow":fmt(d,{weekday:"short"})}${m && m.title ? `<span>· ${esc(m.title.length > 14 ? m.title.slice(0,13) + "…" : m.title)}</span>` : ""}</button>`; }).join("")}</div></div>` : "";
   if (idea) U.pickIdea = idea.id;
-  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel" role="dialog" aria-modal="true" aria-label="${esc(r.title)}"><div class="top-actions">${cookable ? `<button class="btn sm" data-act="cook" data-id="${esc(src)}">Cook</button>` : ""}<button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>${esc(r.title)}</h3>
+  $("#overlay").innerHTML = `<div class="sheet" data-act="closebg"><div class="panel" role="dialog" aria-modal="true" aria-label="${esc(r.title)}"><div class="top-actions">${ideaId ? `<button class="btn sm ghost" data-act="edititem" data-id="${ideaId}">Edit</button>` : ""}${cookable ? `<button class="btn sm" data-act="cook" data-id="${esc(src)}">Cook</button>` : ""}<button class="close" data-act="close" aria-label="Close">${svg("close")}</button></div><h3>${esc(r.title)}</h3>
     ${r.note?`<p class="note" style="font-style:italic;font-size:15px">${esc(r.note)}</p>`:""}${r.meta.length ? `<div class="meta">${r.meta.map(m => { const [a,...b] = m.split(": "); return `<span><b>${esc(a)}</b>${esc(b.join(": "))}</span>`; }).join("")}</div>` : ""}
     ${safeUrl(r.link) || date ? `<div class="inline" style="margin:4px 0 12px">${safeUrl(r.link) ? `<a class="btn sm ${cookable ? "ghost" : ""}" href="${esc(safeUrl(r.link))}" target="_blank" rel="noopener">Open recipe on ${esc(linkLabel(r.link))} ↗</a>` : ""}${date ? `<button class="btn sm quiet" data-act="editdinner" data-id="${date}">Change this dinner</button>` : ""}</div>` : ""}
     ${nights}${body}</div></div>`;
@@ -1035,6 +1058,8 @@ document.addEventListener("click", async ev => {
     case "htab": U.htab = id; ls.set("hph_htab", id); break;
     case "cat": U.catF = id; break;
     case "hlf": U.hlF = id; break;
+    case "ifilter": (U.ideaF ||= {})[b.dataset.g] = id; break;
+    case "ideaadd": U.ideaAdd = !U.ideaAdd; render(); { const i = $("#in-t"); if (i) i.focus(); } return;
     case "calmode": U.calMode = id; U.calOff = 0; break;
     case "caloff": U.calOff = id === "0" ? 0 : U.calOff + (+id); if (id === "0") U.calSel = null; break;
     case "calday": U.calSel = id; if (U.calMode === "month") { U.calMode = "week"; U.calOff = Math.round((pd(weekStart(id)) - pd(weekStart(todayISO()))) / (7*864e5)); } render(); { const p = $("#dpanel"); if (p) p.scrollIntoView({behavior:"smooth", block:"start"}); } return;
@@ -1068,7 +1093,7 @@ document.addEventListener("click", async ev => {
     case "mic": if (rec) stopMic(); else startMic(); return;
     case "undo": undoLast(); return;
     case "dismiss": $("#capout").innerHTML = ""; return;
-    case "close": case "closebg": U.peopleOpen = false; U.edit = null; U.add = null; $("#overlay").innerHTML = ""; return;
+    case "close": case "closebg": U.peopleOpen = false; U.edit = null; U.add = null; U.pickIdea = null; $("#overlay").innerHTML = ""; return;
     default: return;
   }
   render();
@@ -1090,12 +1115,13 @@ document.addEventListener("submit", async e => {
     else if (k === "plan") await add("plans", {title:text, date:d, endDate:"", time:tm, note:"", ...($("#da-weekly") && $("#da-weekly").checked ? {repeat:"weekly"} : {}), createdAt:Date.now()});
     else await add("tasks", {eventId:v("#da-ev"), title:text, date:d, time:tm, t:to24(tm), cat:v("#da-cat") || "house", detail:"", recipe:recipeFor(text), who:U.add.who || "", done:false});
     toast(`Added to ${daysTo(d)===0 ? "today" : daysTo(d)===1 ? "tomorrow" : fmt(d,{weekday:"long"})}`); U.add = null; $("#overlay").innerHTML = ""; render(); return; }
+  if (f === "ideanew" && v("#in-t")) { const L = S.lists.find(isIdeasList); if (L) { await add("items", {listId:L.id, text:v("#in-t"), note:"", time:v("#in-tm"), link:v("#in-l"), recipe:recipeFor(v("#in-t")), done:false, createdAt:Date.now()}); toast("Added to meal ideas"); } U.ideaAdd = false; render(); return; }
   if (f === "planedit" && v("#ep-title")) { const weekly = $("#ep-weekly").checked, d0 = v("#ep-date"), end = $("#ep-end") ? v("#ep-end") : "";
     await w("plans", e.target.dataset.id, {title:v("#ep-title"), date:d0, endDate: !weekly && end && end > d0 ? end : "", time:v("#ep-time"), note:v("#ep-note"), repeat: weekly ? "weekly" : ""}); U.edit = null; $("#overlay").innerHTML = ""; toast("Saved"); render(); return; }
   if (f === "taskedit" && v("#et-title")) { const tm = v("#et-time"), d = {title:v("#et-title"), detail:v("#et-detail"), date:v("#et-date"), time:tm, t:to24(tm), cat:v("#et-cat"), who:(U.edit && U.edit.who) || ""}; if ($("#et-ev")) d.eventId = v("#et-ev");
     await w("tasks", e.target.dataset.id, d); U.edit = null; $("#overlay").innerHTML = ""; toast("Saved"); render(); return; }
   if (f === "itemedit" && v("#ei-text")) { const L = v("#ei-list"), x = S.items.find(i => i.id === e.target.dataset.id), moved = x && x.listId !== L;
-    await w("items", e.target.dataset.id, {text:v("#ei-text"), note:v("#ei-note"), listId:L, who:(U.edit && U.edit.who) || ""}); U.edit = null; $("#overlay").innerHTML = ""; toast(moved ? `Moved to ${(S.lists.find(l => l.id === L) || {}).name || "the list"}` : "Saved"); render(); return; }
+    await w("items", e.target.dataset.id, {text:v("#ei-text"), note:v("#ei-note"), listId:L, who:(U.edit && U.edit.who) || "", ...($("#ei-time") ? {time:v("#ei-time"), link:v("#ei-link"), tags:v("#ei-tags").split(",").map(t => t.trim()).filter(Boolean)} : {})}); U.edit = null; $("#overlay").innerHTML = ""; toast(moved ? `Moved to ${(S.lists.find(l => l.id === L) || {}).name || "the list"}` : "Saved"); render(); return; }
   if (f === "person" && v("#npn2")) { const used = people().map(p => p.color), color = (PCOLORS.find(([k]) => !used.includes(k)) || PCOLORS[people().length % PCOLORS.length])[0];
     await add("people", {name:v("#npn2"), color, order:Date.now()}); e.target.reset(); renderPeople(); const i = $("#npn2"); if (i) i.focus(); return; }
   if (f === "calnew" && v("#cnt")) { const d = e.target.dataset.date, text = v("#cnt"), tm = v("#cntt"), kind = U.calKind;
