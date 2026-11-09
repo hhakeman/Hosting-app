@@ -527,21 +527,21 @@ const ci = k => `<svg viewBox="0 0 24 24" aria-hidden="true" class="ci">${CALI[k
 function dayItems(d, compact){
   const t = todayISO(), m = S.dinners[d], mt = meetingsOn(d), out = [], hol = holidayOn(d);
   if (hol) out.push(`<div class="ce hol">${ci("star")}${esc(hol)}</div>`);
-  plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="view" data-id="plans" title="${esc(p.title)}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
+  plansOn(d).forEach(p => out.push(`<button class="ce plan" data-act="view" data-id="plans" data-drag="plan" data-drag-id="${p.id}" data-drag-from="${d}" title="${esc(p.title)}">${p.time ? `<b>${esc(p.time)}</b> ` : ""}${esc(p.title)}</button>`));
   evsOn(d).forEach(e => out.push(`<button class="ce host" data-act="gohost" data-id="${esc(wkKey(e))}">${ci("host")}${esc(e.short || e.name)}${e.time && !compact ? `<span>${esc(e.time)}</span>` : ""}</button>`));
   if (mt) mt.allDay.forEach(e => out.push(`<div class="ce meet all">${esc(e.subject || "All day")}</div>`));
-  if (m && m.title) out.push(`<button class="ce dinner" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}">${ci("dinner")}${esc(m.title)}</button>`);
+  if (m && m.title) out.push(`<button class="ce dinner" data-act="${recipeObj(m) ? "dayrecipe" : "editdinner"}" data-id="${d}" data-drag="dinner" data-drag-id="${d}" data-drag-from="${d}">${ci("dinner")}${esc(m.title)}</button>`);
   if (mt) mt.timed.forEach(x => { const href = safeUrl(x.e.webLink), inner = `<b>${calTime(x.s)}</b> ${esc(x.e.subject || "(No title)")}`;
     out.push(href ? `<a class="ce meet" href="${esc(href)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="ce meet">${inner}</div>`); });
   const tk = tasksOn(d).filter(whoMatch), nDone = tk.filter(x => x.done).length;
-  tk.filter(x => !x.done).forEach(x => { const p = personOf(x.who); out.push(`<div class="ce todo ${d < t ? "late" : ""}" ${p ? `style="--pc:${pColor(p)}"` : ""}>${ck(false, "task", x.id, x.title)}<span class="tapedit" data-act="edittask" data-id="${x.id}">${x.cat === "freezer" ? ci("fz") : ""}${esc(x.title)}</span></div>`); });
+  tk.filter(x => !x.done).forEach(x => { const p = personOf(x.who); out.push(`<div class="ce todo ${d < t ? "late" : ""}" data-drag="task" data-drag-id="${x.id}" data-drag-from="${d}" ${p ? `style="--pc:${pColor(p)}"` : ""}>${ck(false, "task", x.id, x.title)}<span class="tapedit" data-act="edittask" data-id="${x.id}">${x.cat === "freezer" ? ci("fz") : ""}${esc(x.title)}</span></div>`); });
   if (nDone && !compact) out.push(`<button class="ce donecount" data-act="calday" data-id="${d}">${CHECK}${nDone} done</button>`);
   return out;
 }
 
 function vCal(){
   const t = todayISO();
-  const legend = `<div class="cal-legend"><span class="lg meet">Meetings</span><span class="lg dinner">Dinner</span><span class="lg plan">Plans</span><span class="lg host">Hosting</span><span class="lg todo">To-dos</span><span class="lg hol">Holidays</span></div>`;
+  const legend = `<div class="cal-legend"><span class="lg meet">Meetings</span><span class="lg dinner">Dinner</span><span class="lg plan">Plans</span><span class="lg host">Hosting</span><span class="lg todo">To-dos</span><span class="lg hol">Holidays</span><span class="lg-hint">Press and hold a to-do, plan or dinner to drag it to another day</span></div>`;
   const modes = `<div class="seg" role="tablist" aria-label="View"><button aria-pressed="${U.calMode==="week"}" data-act="calmode" data-id="week">Week</button><button aria-pressed="${U.calMode==="month"}" data-act="calmode" data-id="month">Month</button></div>`;
   let range, grid;
   if (U.calMode === "month") {
@@ -550,14 +550,14 @@ function vCal(){
     const weeks = Math.ceil((daysTo(mEnd) - daysTo(gStart) + 1) / 7);
     range = fmt(first, {month:"long", year:"numeric"});
     const cells = []; for (let i = 0; i < weeks*7; i++) { const d = addDays(gStart, i), items = dayItems(d, true), out = d.slice(0,7) !== first.slice(0,7);
-      cells.push(`<div class="mcell ${d===t?"today":""} ${out?"out":""} ${U.calSel===d?"sel":""}" data-act="calday" data-id="${d}" role="button" tabindex="0"><div class="mtop"><div class="mnum">${pd(d).getDate()}</div><button class="madd" data-act="caladd" data-id="${d}" aria-label="Add to ${fmt(d,{month:"long",day:"numeric"})}">${svg("plus")}</button></div><div class="mitems">${items.slice(0,3).join("")}${items.length > 3 ? `<div class="more">+${items.length - 3} more</div>` : ""}</div></div>`); }
+      cells.push(`<div class="mcell ${d===t?"today":""} ${out?"out":""} ${U.calSel===d?"sel":""}" data-act="calday" data-id="${d}" data-day="${d}" role="button" tabindex="0"><div class="mtop"><div class="mnum">${pd(d).getDate()}</div><button class="madd" data-act="caladd" data-id="${d}" aria-label="Add to ${fmt(d,{month:"long",day:"numeric"})}">${svg("plus")}</button></div><div class="mitems">${items.slice(0,3).join("")}${items.length > 3 ? `<div class="more">+${items.length - 3} more</div>` : ""}</div></div>`); }
     grid = `<div class="month"><div class="mhead">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x => `<div>${x}</div>`).join("")}</div><div class="mgrid">${cells.join("")}</div></div>`;
   } else {
     const start = addDays(weekStart(t), U.calOff*7), days = [0,1,2,3,4,5,6].map(i => addDays(start, i));
     calWeekWatch(start);
     range = `${fmt(start,{month:"long",day:"numeric"})} – ${fmt(days[6],{month: pd(start).getMonth()===pd(days[6]).getMonth() ? undefined : "long", day:"numeric"})}`;
     grid = `<div class="wgrid">${days.map(d => { const items = dayItems(d, false), w = wxOn(d), n = daysTo(d);
-      return `<div class="wcol ${d===t?"today":""} ${n<0?"past":""} ${U.calSel===d?"sel":""}"><button class="wadd" data-act="caladd" data-id="${d}" aria-label="Add to ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}">${svg("plus")}</button><button class="whead" data-act="calday" data-id="${d}" aria-label="${fmt(d,{weekday:"long",month:"long",day:"numeric"})}"><span class="wd">${fmt(d,{weekday:"short"})}</span><span class="wn">${pd(d).getDate()}</span>${w ? `<span class="ww">${wxSvg(w.day.icon)}${w.day.temperature}°<i>${w.night.temperature}°</i></span>` : ""}</button>
+      return `<div class="wcol ${d===t?"today":""} ${n<0?"past":""} ${U.calSel===d?"sel":""}" data-day="${d}"><button class="wadd" data-act="caladd" data-id="${d}" aria-label="Add to ${fmt(d,{weekday:"long",month:"long",day:"numeric"})}">${svg("plus")}</button><button class="whead" data-act="calday" data-id="${d}" aria-label="${fmt(d,{weekday:"long",month:"long",day:"numeric"})}"><span class="wd">${fmt(d,{weekday:"short"})}</span><span class="wn">${pd(d).getDate()}</span>${w ? `<span class="ww">${wxSvg(w.day.icon)}${w.day.temperature}°<i>${w.night.temperature}°</i></span>` : ""}</button>
         <div class="witems">${items.join("") || `<button class="wempty" data-act="caladd" data-id="${d}">Free</button>`}</div></div>`; }).join("")}</div>`;
   }
   const head = `<div class="ph"><div><h1>Calendar</h1><div class="sub">Meetings, dinners, plans and hosting in one place</div></div>${modes}</div>
@@ -1090,6 +1090,43 @@ document.addEventListener("submit", async e => {
     e.target.reset(); render(); const q = $("#nq"); if (q) q.focus(); return; }
   e.target.reset(); render();
 });
+
+/* Calendar drag: press and hold (touch) or click and drag (mouse) a to-do, plan or dinner, then drop it on another day.
+   Touch waits 320ms without moving before it lifts, so ordinary scrolling is untouched. While dragging, the page scrolls near its edges. */
+let DG = null, dgJust = 0;
+const dgClear = () => document.querySelectorAll(".drop-over").forEach(e => e.classList.remove("drop-over"));
+function dgStart(target, x, y, mouse){ if (U.view !== "cal" || !target.closest) return; const el = target.closest("[data-drag]"); if (!el || target.closest(".ck")) return;
+  DG = {el, kind:el.dataset.drag, id:el.dataset.dragId, from:el.dataset.dragFrom, x0:x, y0:y, x, y, mouse, active:false};
+  if (!mouse) DG.timer = setTimeout(() => dgActivate(), 320); }
+function dgActivate(){ if (!DG || DG.active) return; const d = DG, r = d.el.getBoundingClientRect(); d.active = true;
+  try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+  const g = d.el.cloneNode(true); g.classList.add("dg-ghost"); g.removeAttribute("data-act"); g.style.width = r.width + "px"; d.dx = d.x0 - r.left; d.dy = d.y0 - r.top; document.body.append(g); d.ghost = g;
+  d.el.classList.add("dg-src"); document.body.classList.add("dragging"); dgPlace(); dgScroll(); }
+function dgPlace(){ const d = DG; if (!d || !d.ghost) return; d.ghost.style.left = (d.x - d.dx) + "px"; d.ghost.style.top = (d.y - d.dy) + "px";
+  d.ghost.style.visibility = "hidden"; const under = document.elementFromPoint(d.x, d.y); d.ghost.style.visibility = "";
+  const col = under && under.closest && under.closest("[data-day]"); dgClear(); if (col && col.dataset.day !== d.from) col.classList.add("drop-over"); d.over = col ? col.dataset.day : null; }
+function dgScroll(){ const d = DG; if (!d || !d.active) return; const sc = $("#main"), r = sc.getBoundingClientRect(), edge = 70;
+  const v = d.y < r.top + edge ? -Math.ceil((r.top + edge - d.y) / 6) : d.y > r.bottom - edge ? Math.ceil((d.y - r.bottom + edge) / 6) : 0;
+  if (v) { sc.scrollTop += v; dgPlace(); } requestAnimationFrame(dgScroll); }
+function dgMove(x, y){ const d = DG; if (!d) return false; d.x = x; d.y = y;
+  if (!d.active) { const far = Math.hypot(x - d.x0, y - d.y0); if (d.mouse && far > 6) dgActivate(); else if (!d.mouse && far > 8) { clearTimeout(d.timer); DG = null; } return !!(DG && DG.active); }
+  dgPlace(); return true; }
+async function dgEnd(){ const d = DG; if (!d) return; clearTimeout(d.timer); DG = null; if (!d.active) return;
+  if (d.ghost) d.ghost.remove(); d.el.classList.remove("dg-src"); document.body.classList.remove("dragging"); dgClear(); dgJust = Date.now();
+  if (!d.over || d.over === d.from) return;
+  const to = d.over, shift = daysTo(to) - daysTo(d.from);
+  if (d.kind === "task") await w("tasks", d.id, {date:to});
+  else if (d.kind === "plan") { const p = S.plans.find(x => x.id === d.id); if (!p) return; await w("plans", d.id, {date:addDays(p.date, shift), endDate: p.endDate ? addDays(p.endDate, shift) : ""}); }
+  else if (d.kind === "dinner") { const a = S.dinners[d.from], b = S.dinners[to]; if (!a) return; await w("dinners", to, a, "set"); if (b) await w("dinners", d.from, b, "set"); else await w("dinners", d.from, null, "delete"); if (b) { toast(`Swapped ${a.title} and ${b.title}`); render(); return; } }
+  toast(`Moved to ${daysTo(to)===0 ? "today" : daysTo(to)===1 ? "tomorrow" : fmt(to,{weekday:"long",month:"short",day:"numeric"})}`); render(); }
+document.addEventListener("touchstart", e => { if (e.touches.length !== 1) { if (DG) { clearTimeout(DG.timer); DG = null; } return; } const t = e.touches[0]; dgStart(e.target, t.clientX, t.clientY, false); }, {passive:true});
+document.addEventListener("touchmove", e => { if (!DG) return; const t = e.touches[0]; if (dgMove(t.clientX, t.clientY) && e.cancelable) e.preventDefault(); }, {passive:false});
+document.addEventListener("touchend", () => dgEnd(), {passive:true}); document.addEventListener("touchcancel", () => dgEnd(), {passive:true});
+document.addEventListener("pointerdown", e => { if (e.pointerType === "touch" || e.button !== 0) return; dgStart(e.target, e.clientX, e.clientY, true); });
+document.addEventListener("pointermove", e => { if (e.pointerType === "touch" || !DG) return; if (dgMove(e.clientX, e.clientY)) e.preventDefault(); });
+document.addEventListener("pointerup", e => { if (e.pointerType !== "touch") dgEnd(); });
+document.addEventListener("click", e => { if (Date.now() - dgJust < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener("contextmenu", e => { if (e.target.closest && e.target.closest("[data-drag]")) e.preventDefault(); });
 
 /* Swipe a list row left to reveal Delete. Vertical scrolling is untouched (touch-action: pan-y). */
 /* Touch uses touch events with a non-passive move, so once a drag reads as sideways the page keeps it
