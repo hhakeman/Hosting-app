@@ -7,12 +7,12 @@ category: {"CroissantBake": "Breakfast", "Challah": "Breakfast", "Frittata": "Br
 timing: {
   Turducken:[[-345,"Into the oven, covered",375,300],[-105,"Uncover and brush with melted butter"],[-45,"Out to rest. Check 165°F in the very center"],[-15,"Carve straight across so every slice shows all three layers"]],
   Gravy:[[-20,"Make gravy from the pan drippings on the stove"]],
-  Stuffing:[[-75,"Into the oven, covered",350,70],[-35,"Uncover so the top crisps"]],
-  MomStuffing:[[-65,"Into the oven, covered",325,60],[-20,"Uncover so the top crisps"]],
+  Stuffing:[[-120,"Stuffing out of the fridge"],[-75,"Into the oven, covered",350,70],[-35,"Uncover so the top crisps"]],
+  MomStuffing:[[-110,"Stuffing out of the fridge"],[-65,"Into the oven, covered",325,60],[-20,"Uncover so the top crisps"]],
   Mashed:[[-45,"Potatoes on to boil"],[-20,"Drain, mash with the roasted garlic and warm butter mixture, hold warm"]],
-  MacCheese:[[-65,"Into the oven, covered (thawed from the freezer)",350,45],[-30,"Uncover so the top browns"]],
-  GreenBeans:[[-40,"Into the oven",375,32],[-12,"Stir and scatter the crispy onions on top"]],
-  SweetPotato:[[-55,"Into the oven",350,45]],
+  MacCheese:[[-110,"Mac and cheese out of the fridge"],[-65,"Into the oven, covered (thawed from the freezer)",350,45],[-30,"Uncover so the top browns"]],
+  GreenBeans:[[-85,"Green bean casserole out of the fridge"],[-40,"Into the oven",375,32],[-12,"Stir and scatter the crispy onions on top"]],
+  SweetPotato:[[-100,"Sweet potato casserole out of the fridge. The streusel can go on straight from the freezer"],[-55,"Streusel on top, into the oven",350,45]],
   Rolls:[[-180,"Pull the rolls from the freezer to thaw"],[-15,"Warm the rolls",350,10],[-3,"Brush with butter and sprinkle sea salt"]],
   Carrots:[[-35,"Into the oven",425,30],[-20,"Flip the carrots"],[-10,"Whip the feta and plate the carrots on top"]],
   Cranberry:[[-60,"Cranberry sauce out of the fridge"]],
@@ -21,10 +21,11 @@ timing: {
   Ham:[[-195,"Ham out of the fridge"],[-135,"Into the oven, covered (timed for an 8 lb ham)",325,100],[-35,"Uncover, brush on half the glaze",400,20],[-25,"Second coat of glaze"],[-15,"Out to rest"]],
   Tenderloin:[[-55,"Sear on the stove, 3–4 min per side"],[-47,"Into the oven",400,30],[-17,"Rest 10–15 minutes"],[-5,"Slice and spoon the buttery pan juices over"]],
   RoastedGarlic:[[-60,"Into the oven",400,50]],
+  Bread:[[-240,"Mix the bread dough. It rises 2 to 3 hours"],[-90,"Dutch oven in, lid on, to heat up",450,85],[-50,"Dough into the hot pot, lid on"],[-12,"Lid off until golden"]],
   Caviar:[[-20,"Tin on crushed ice, garnishes in small bowls"],[-8,"Warm the blini",350,5]],
   CheeseBoard:[[-60,"Cheeses out of the fridge"],[-15,"Build the board"]],
   Mushrooms:[[-30,"Into the oven",375,25]],
-  SwissDip:[[-25,"Into the oven",350,20]],
+  SwissDip:[[-70,"Swiss dip out of the fridge"],[-25,"Into the oven",350,20]],
   Dates:[[-25,"Into the oven",400,20],[-15,"Turn the dates"]],
   WaterChestnuts:[[-45,"Into the oven",375,30],[-15,"Sauce on, back into the oven",375,13]],
   HamRolls:[[-10,"Slice and plate"]],
@@ -40,5 +41,5 @@ timing: {
 // Oven flexibility per recipe: [lowest °F, highest °F, holds well covered]
 flex: { Turducken:[375,375,true], Stuffing:[325,375,true], MomStuffing:[325,375,true], MacCheese:[325,375,true], GreenBeans:[350,400,true], SweetPotato:[325,375,true],
   Rolls:[325,375,true], Carrots:[400,425,false], Ham:[325,325,true], Tenderloin:[400,425,false], RoastedGarlic:[350,400,true], Caviar:[325,400,true], Mushrooms:[350,400,true],
-  SwissDip:[325,375,true], Dates:[375,425,false], WaterChestnuts:[350,400,true], Frittata:[350,375,false], CroissantBake:[325,375,true] }
+  SwissDip:[325,375,true], Bread:[450,450,true], Dates:[375,425,false], WaterChestnuts:[350,400,true], Frittata:[350,375,false], CroissantBake:[325,375,true] }
 };

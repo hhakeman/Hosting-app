@@ -698,3 +698,86 @@ body.dragging,body.dragging *{cursor:grabbing!important}
 .ipick span{color:var(--muted);font-weight:400;margin-left:6px}
 .ipick:hover{border-color:var(--green);background:var(--green-soft)}
 .daycard.drop-over{outline:3px solid var(--green)}
+
+/* Day-of run sheet: two columns on the counter iPad (to-dos, and what cooks), stacked on a phone. Big rows and checkboxes,
+   ruled like a page of paper, so it reads at arm's length with flour on your hands. */
+.v-hosting .wrap:has(.daywrap){max-width:1280px}
+.dayhead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 24px;margin:16px 0 14px}
+.dayhead h2{font-family:var(--display);font-weight:500;font-size:34px;line-height:1.05;margin:0}
+.dayhead .eyebrow{margin-bottom:4px}
+.dcount{margin:6px 0 0;font-size:15px;color:var(--muted)}.dcount b{color:var(--green);font-size:18px}
+.dayhead .times{margin:0}
+.daywrap{container-type:inline-size}
+.dayof{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
+@container (min-width:680px){.dayof{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}}
+.dcol{background:#FFFEFB;border:1px solid var(--line);border-radius:var(--r);padding:16px 18px 18px;min-width:0}
+.dcol.oven{background:var(--card)}
+.dcolh{font-family:var(--display);font-weight:600;font-size:26px;margin:0 0 6px;line-height:1.1}
+.dblock{margin-top:14px}
+.dblock header{display:flex;align-items:baseline;gap:10px;padding:6px 2px 8px;border-bottom:2px solid var(--ink)}
+.dblock header h3{margin:0;font:600 13px var(--sans);letter-spacing:.16em;text-transform:uppercase}
+.dblock header span{font-size:14px;color:var(--muted)}
+.dblock.cur header{border-bottom-color:var(--clay)}.dblock.cur header h3{color:var(--clay)}
+.dnone{margin:10px 2px;font-size:15px;color:var(--faint)}
+.rrow{display:flex;align-items:center;gap:14px;min-height:62px;padding:10px 2px;border-bottom:1px solid #E3DCD0}
+.dmain{flex:1;min-width:0}
+.dt{font-size:19px;line-height:1.3}
+.ds{font-size:14px;color:var(--muted);margin-top:2px;line-height:1.35}
+.dtime{flex:none;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rrow.done .dt{text-decoration:line-through;text-decoration-thickness:2px;color:var(--faint)}
+.rrow.done .ds,.rrow.done .dtime{color:var(--faint)}
+.rrow.late .dtime{color:var(--clay);font-weight:500}
+.ck.dck{flex:0 0 38px;width:38px;height:38px;border-width:2px;border-color:var(--muted);border-radius:10px;margin:0}
+.ck.dck svg{width:22px;height:22px}
+.ck.dck[aria-checked="true"]{border-color:var(--green)}
+.ck.dck.sm{flex-basis:30px;width:30px;height:30px;border-radius:8px}
+.ck.dck.sm svg{width:17px;height:17px}
+.rsadd{margin-top:16px}
+.rsadd input[type=text]{font-size:17px}
+.ocard{background:var(--raised);border:1px solid var(--line);border-left:5px solid var(--clay);border-radius:16px;padding:14px 16px;margin:10px 0;box-shadow:0 1px 2px rgba(43,41,37,.04)}
+.ocard.k-crock,.ocard.k-stove{border-left-color:var(--gold)}
+.ocard.run{border-color:var(--clay);box-shadow:0 0 0 2px var(--clay-soft)}
+.ocard.done{border-left-color:var(--green);background:#F6F9F6}
+.ocard.done .otitle b{text-decoration:line-through;color:var(--muted)}
+.ocard.past{opacity:.6}
+.ohead{display:flex;align-items:flex-start;gap:14px}
+.otime{flex:none;min-width:64px;font:500 26px var(--display);line-height:1.05;font-variant-numeric:tabular-nums;color:var(--clay)}
+.ocard.k-crock .otime,.ocard.k-stove .otime{color:var(--gold)}
+.ocard.done .otime{color:var(--green)}
+.otitle{flex:1;min-width:0}
+.otitle b{display:block;font-size:19px;font-weight:500;line-height:1.25}
+.otitle span{display:block;font-size:15px;color:var(--muted);margin-top:2px}
+.ometa{margin:6px 0 0 78px}
+.ometa .pill{font-size:13px}
+.pill.kind{background:var(--gold-soft);color:var(--gold)}
+.onote{margin:8px 0 0 78px;font-size:14px;color:var(--muted)}
+.onote.tray{color:var(--teal);font-weight:500}
+.onote.warn{color:var(--warn);font-weight:500}
+.osteps{list-style:none;margin:10px 0 0 78px;padding:0}
+.osteps li{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px dashed var(--line);font-size:16px}
+.osteps .st{flex:none;min-width:44px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.osteps .sx{flex:1;min-width:0}
+.osteps li.done .sx{text-decoration:line-through;color:var(--faint)}
+.btn.tstart{margin:12px 0 0 78px;background:var(--clay);min-height:48px;font-size:16px}
+.otimer{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:12px 0 0 78px;padding:10px 14px;border-radius:14px;background:var(--clay-soft)}
+.tmv{font:500 34px var(--display);line-height:1;color:var(--clay);font-variant-numeric:tabular-nums;min-width:120px}
+.tmx{font-size:14px;color:var(--clay);margin-right:auto}
+.otimer.ding{background:var(--clay);animation:pulse 1.2s ease-in-out infinite}
+.otimer.ding .tmv,.otimer.ding .tmx{color:#fff}
+@media (prefers-reduced-motion:reduce){.otimer.ding{animation:none}}
+.otemp{display:flex;align-items:center;gap:12px;margin:14px 2px 4px;font-size:15px;font-weight:500;color:var(--clay)}
+.otemp span{min-width:64px;font-variant-numeric:tabular-nums}
+.otemp::after{content:"";flex:1;border-top:1px dashed var(--clay-soft)}
+.oms{display:flex;align-items:center;gap:12px;margin:14px 0;padding:10px 14px;border-radius:14px;background:var(--green);color:#fff;font:500 21px var(--display)}
+.oms span{min-width:52px;font:500 15px var(--sans);color:#F2E4C2;font-variant-numeric:tabular-nums}
+.onow{display:flex;align-items:center;gap:10px;margin:10px 0;color:var(--clay);font-size:14px;font-weight:500}
+.onow::after{content:"";flex:1;height:2px;background:var(--clay);border-radius:2px}
+@container (max-width:420px){.ometa,.onote,.osteps,.otimer,.btn.tstart{margin-left:0}.otime{min-width:54px;font-size:23px}}
+.add.rsadd{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center}
+.add.rsadd > *{width:auto;margin:0}
+.add.rsadd input[type=text]{flex:1 1 200px;min-width:0}
+.add.rsadd select{flex:1 1 auto}
+.add.rsadd .btn{flex:0 0 auto}
+.otimer{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center}
+.otimer .tmv{min-width:0}.otimer .tmx{margin:0}
+.otimer .btn{padding-inline:12px}

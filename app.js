@@ -246,6 +246,7 @@ function render(){
   const sc = $("#main");
   setHTML(sc, `<div class="wrap v-${U.view} ${U.view === "cal" ? "wide" : ""}">${body}</div>`);
   if (render.k !== key) { sc.scrollTop = 0; render.k = key; }
+  if (ready && U.view === "hosting" && U.htab === "day") keepAwake(true); else if (!COOK && wake) keepAwake(false);
 }
 
 /* ───────────────────────── 2. Today ───────────────────────── */
@@ -652,9 +653,9 @@ function vHosting(){
   const one = U.sub !== "all" ? evById(U.sub) : null;
   const head = `<div class="ph"><div><h1>Hosting</h1></div><div class="seg" role="tablist" aria-label="Holiday">${wks.map(x => `<button role="tab" aria-pressed="${x.k===U.wk}" data-act="wk" data-id="${x.k}">${esc(WK_NAMES[x.k] || x.evs[0].name)}</button>`).join("")}</div></div>
     <div class="chips evchips" role="tablist" aria-label="Events"><button class="chip" aria-pressed="${U.sub==="all"}" data-act="sub" data-id="all">All</button>${evs.map(e => `<button class="chip" aria-pressed="${U.sub===e.id}" data-act="sub" data-id="${e.id}">${esc(e.short||e.name)}</button>`).join("")}</div>
-    <div class="card sum"><div class="host-card"><div><div class="name">${esc(one ? one.name : wkName())}</div><div class="when">${one ? `${fmt(one.date,{weekday:"long",month:"long",day:"numeric"})}${one.time ? " · " + esc(one.time) : ""}` : range}</div>${one && one.theme ? `<div class="sum-th">${esc(one.theme)}</div>` : ""}</div>
+    ${U.htab === "day" ? "" : `<div class="card sum"><div class="host-card"><div><div class="name">${esc(one ? one.name : wkName())}</div><div class="when">${one ? `${fmt(one.date,{weekday:"long",month:"long",day:"numeric"})}${one.time ? " · " + esc(one.time) : ""}` : range}</div>${one && one.theme ? `<div class="sum-th">${esc(one.theme)}</div>` : ""}</div>
       <div class="count"><b>${n < 0 ? "Done" : n}</b><span>${n < 0 ? "" : n === 1 ? "day to go" : "days to go"}</span></div></div>
-      <div class="stats"><span><b>${done}/${tasks.length}</b> to-dos done</span><span><b>${yes}/${gAll.length}</b> guests confirmed</span></div><div class="bar"><i style="width:${tasks.length ? Math.round(done/tasks.length*100) : 0}%"></i></div></div>
+      <div class="stats"><span><b>${done}/${tasks.length}</b> to-dos done</span><span><b>${yes}/${gAll.length}</b> guests confirmed</span></div><div class="bar"><i style="width:${tasks.length ? Math.round(done/tasks.length*100) : 0}%"></i></div></div>`}
     <div class="htabs" role="tablist">${HTABS.map(([k,l]) => `<button role="tab" aria-selected="${U.htab===k}" data-act="htab" data-id="${k}">${l}</button>`).join("")}</div>`;
   return head + ({plan:vPlan, menu:vMenu, day:vDay, shop:vShop, guests:vGuests, rooms:vRooms})[U.htab]();
 }
@@ -724,74 +725,141 @@ function vRooms(){
     `<h2 class="eyebrow">Add a room</h2><form class="add" data-form="room"><input type="text" id="nr" placeholder="e.g. Basement suite" required><button class="btn">Add</button></form>`;
 }
 
-/* Day-of: one oven, dishes fitted backward from serving time. Ported unchanged, plus a "now" marker on the day. */
+/* Day-of: one run sheet for the day, made to be checked off like a list on paper.
+   Left: to-dos. The event's hosting tasks for that date, plus the prep the cooking needs (a casserole out of the fridge, dough mixed).
+   Right: everything that cooks (oven, crock pot, stove), each card with its own timer. The oven is planned for one temperature at a
+   time and N dishes at once, fitted backward from serving time. Dishes that hold well can finish early and wait on the warming tray.
+   Timing comes from the cookbook per recipe, or from a dish's own `timing` (list of {at, txt, temp, mins, kind}) and `flex`.
+   Checkmarks and timer starts live in checks/day:<eventId> so every device sees the same sheet. */
 const hm = s => { const m = /^(\d{1,2}):(\d{2})/.exec(s||""); return m ? (+m[1])*60 + (+m[2]) : null; };
 const m2hm = m => pad(Math.floor(((m%1440)+1440)%1440/60)) + ":" + pad(((m%60)+60)%60);
-const fmtT = m => { m = ((m%1440)+1440)%1440; const h = Math.floor(m/60), mm = m%60; return `${(h%12)||12}:${pad(mm)} ${h<12?"AM":"PM"}`; };
+const fmtT = m => { m = ((Math.round(m)%1440)+1440)%1440; const h = Math.floor(m/60), mm = m%60; return `${(h%12)||12}:${pad(mm)} ${h<12?"AM":"PM"}`; };
+const fmtS = m => fmtT(m).replace(/ (AM|PM)$/, "");
 function to24(s){ const m = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(s||""); if (!m) return ""; let h = +m[1]; if (m[3]) { const pm = /pm/i.test(m[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; } return pad(h) + ":" + (m[2]||"00"); }
-function vDay(){
-  const evs = scopeEvs().filter(e => S.dishes.some(d => d.eventId === e.id));
-  if (!evs.length) return `<div class="empty"><b>Nothing to time yet</b>Add dishes on the Menu tab and the cooking timeline shows up here.</div>`;
-  const e = evs.find(x => x.id === U.dayEv) || evs.find(x => daysTo(x.date) >= 0) || evs[0];
-  const dishes = S.dishes.filter(d => d.eventId === e.id), mineD = dishes.filter(d => !byOther(d));
-  const ovenSteps = d => { let P = TIMING[d.recipe]; if (!P) return null; if (byOther(d)) { const k = P.findIndex(p => p[2]); if (k < 0) return null; P = P.slice(k); } return P; };
-  const cooks = dishes.filter(d => ovenSteps(d));
-  const hasC = c => mineD.concat(cooks).some(d => (d.course||"Other") === c);
+const durLabel = m => { m = Math.round(m); const h = Math.floor(m/60), r = m%60; return h ? `${h} hr${r ? ` ${r} min` : ""}` : `${r} min`; };
+const NO_TRAY = ["Turducken","Ham","Tenderloin","Bread","RoastedGarlic","Rolls","Caviar","CroissantBake"];
+const stepsOf = d => Array.isArray(d.timing) && d.timing.length ? d.timing.map(s => Array.isArray(s) ? s : [+s.at, s.txt || "", s.temp == null ? null : +s.temp, s.mins == null ? null : +s.mins, s.kind || ""]) : (TIMING[d.recipe] || null);
+const flexOf = d => Array.isArray(d.flex) && d.flex.length === 3 ? d.flex : FLEX[d.recipe];
+const stepKind = p => typeof p[2] === "number" && p[2] > 0 ? "oven" : p[4] === "crock" || /crock ?pot/i.test(p[1]) ? "crock" : /broil/i.test(p[1]) ? "broil" : p[4] === "stove" || /\b(stove|boil|simmer|sear|skillet)/i.test(p[1]) ? "stove" : "prep";
+const KIND = {crock:"Crock pot", stove:"Stove", broil:"Broiler"};
+const dayDoc = e => S.checks["day:" + e.id] || {};
+
+function dayPlan(e){
+  const dishes = S.dishes.filter(d => d.eventId === e.id);
+  const cookSteps = d => { let P = stepsOf(d); if (!P || !P.length) return null; if (byOther(d)) { const k = P.findIndex(p => stepKind(p) === "oven"); if (k < 0) return null; P = P.slice(k); } return P; };
+  const list = dishes.map(d => ({d, P: cookSteps(d)})).filter(x => x.P);
+  const has = c => dishes.some(d => (d.course||"Other") === c);
   const dinner = hm(e.dinnerAt) ?? hm(to24(e.time)) ?? 18*60;
   const apps = hm(e.appsAt) ?? dinner - 60, bfast = hm(e.breakfastAt) ?? 8*60+30;
-  const cap = +(e.ovenCap || 3);
-  const mains = mineD.concat(cooks).some(d => !["Appetizers","Breakfast","Drinks"].includes(d.course||"Other"));
-  let html = evs.length > 1 ? `<div class="chips" style="margin-top:12px">${evs.map(x => `<button class="chip" aria-pressed="${x.id===e.id}" data-act="dayev" data-id="${x.id}">${esc(x.short||x.name)}</button>`).join("")}</div>` : "";
-  html += `<div class="times">` +
-    (hasC("Breakfast") ? `<label>Breakfast<input type="time" id="t-bf" data-set="breakfastAt" data-ev="${e.id}" value="${m2hm(bfast)}"></label>` : "") +
-    (hasC("Appetizers") ? `<label>Guests arrive, apps out<input type="time" id="t-apps" data-set="appsAt" data-ev="${e.id}" value="${m2hm(apps)}"></label>` : "") +
-    (mains ? `<label>Dinner on the table<input type="time" id="t-din" data-set="dinnerAt" data-ev="${e.id}" value="${m2hm(dinner)}"></label>` : "") +
-    `<label>Oven fits at once<select id="t-cap" data-set="ovenCap" data-ev="${e.id}">${[1,2,3,4,5].map(n => `<option value="${n}" ${n===cap?"selected":""}>${n} dish${n>1?"es":""}</option>`).join("")}</select></label></div>`;
+  const cap = +(e.ovenCap || 3), trayCap = e.trayCap == null ? 4 : +e.trayCap;
   const anchorOf = d => { const c = d.course||"Other"; return c === "Breakfast" ? bfast : c === "Appetizers" ? apps : dinner; };
-  const blocks = cooks.map(d => { const P = ovenSteps(d), ov = P.filter(p => p[2]); if (!ov.length) return null;
-    const a = anchorOf(d), s0 = a + ov[0][0], e0 = Math.max(...ov.map(p => a + p[0] + p[3])), f = FLEX[d.recipe] || [ov[0][2]-25, ov[0][2]+25, true];
-    return {d, a, s0: Math.floor(s0/5)*5, dur: Math.ceil((e0 - Math.floor(s0/5)*5)/5)*5, temp: ov[0][2], lo: f[0], hi: f[1], hold: f[2], big: d.recipe === "Turducken" || d.recipe === "Ham"}; }).filter(Boolean);
-  const STEP = 5, slots = new Map(), slot = t => slots.get(t) || {temp:null, n:0, names:[]};
-  const fits = (b, end) => { let t0 = null; for (let t = end - b.dur; t < end; t += STEP) { const s = slot(t); if (s.n >= cap) return null; if (s.temp != null) { if (s.temp < b.lo || s.temp > b.hi) return null; if (t0 != null && t0 !== s.temp) return null; t0 = s.temp; } } return t0 ?? b.temp; };
-  blocks.sort((x,y) => (y.big?1:0) - (x.big?1:0) || (x.hold?1:0) - (y.hold?1:0) || y.dur - x.dur);
-  const bad = [];
+  const trayOk = d => trayCap > 0 && d.tray !== false && !NO_TRAY.includes(d.recipe) && !["Breakfast","Drinks","Dessert"].includes(d.course||"Other");
+  const blocks = list.map(({d, P}) => { const ov = P.filter(p => stepKind(p) === "oven"); if (!ov.length) return null;
+    const a = anchorOf(d), s0 = a + ov[0][0], e0 = Math.max(...ov.map(p => a + p[0] + (p[3]||0))), f = flexOf(d) || [ov[0][2]-25, ov[0][2]+25, true], st = Math.floor(s0/5)*5;
+    return {d, a, s0: st, dur: Math.ceil((e0 - st)/5)*5, mins: e0 - s0, temp: ov[0][2], lo: f[0], hi: f[1], hold: !!f[2], big: ["Turducken","Ham"].includes(d.recipe), tray: trayOk(d) && !!f[2]}; }).filter(Boolean);
+  // Hot apps sit on the tray through cocktail hour; dinner dishes only when they finish 10+ minutes before dinner.
+  const trayRange = (b, end) => { if (!b.tray) return null; if ((b.d.course||"") === "Appetizers") { const until = Math.min(apps + 90, dinner - 30); return until > end ? [end, until] : null; } return b.a - end >= 10 ? [end, b.a] : null; };
+  const STEP = 5, slots = new Map(), slot = t => slots.get(t) || {temp:null, n:0}, tray = new Map();
+  const fits = (b, end, useTray) => { let t0 = null;
+    for (let t = end - b.dur; t < end; t += STEP) { const s = slot(t); if (s.n >= cap) return null; if (s.temp != null) { if (s.temp < b.lo || s.temp > b.hi) return null; if (t0 != null && t0 !== s.temp) return null; t0 = s.temp; } }
+    const r = useTray ? trayRange(b, end) : null; if (r) for (let t = Math.floor(r[0]/STEP)*STEP; t < r[1]; t += STEP) if ((tray.get(t)||0) >= trayCap) return null;
+    if (t0 != null) return t0;
+    // Nothing else in the oven then: keep whatever temperature the oven is already at nearby, if the dish can take it, so it isn't changed for a 10-minute job.
+    for (let k = STEP; k <= 90; k += STEP) for (const t of [end - b.dur - k, end + k - STEP]) { const s = slots.get(t); if (s && s.temp != null && s.temp >= b.lo && s.temp <= b.hi) return s.temp; }
+    return b.temp; };
+  const rank = b => (b.d.course||"Other") === "Breakfast" ? 0 : (b.d.course||"") === "Appetizers" ? 1 : 2;
+  // Fixed and must-serve-now dishes first, then by meal, then the quickest dishes take the slots nearest serving time so the long, sturdy ones (stuffing) are the ones that wait on the tray.
+  blocks.sort((x,y) => (y.big?1:0) - (x.big?1:0) || (x.hold?1:0) - (y.hold?1:0) || rank(x) - rank(y) || x.dur - y.dur);
   blocks.forEach(b => { const latest = b.s0 + b.dur;
-    for (let end = latest; end >= latest - 8*60; end -= STEP) { const t = fits(b, end); if (t == null) continue;
-      for (let x = end - b.dur; x < end; x += STEP) { const s = slot(x); s.temp = t; s.n++; s.names.push(b.d.name); slots.set(x, s); }
-      b.shift = end - (b.s0 + b.dur); b.at = t; return; }
-    b.shift = 0; b.at = b.temp; bad.push(b); });
-  const shiftOf = new Map(blocks.map(b => [b.d.id, b]));
-  const rows = [];
-  cooks.forEach(d => { const P = ovenSteps(d), b = shiftOf.get(d.id), sh = b ? b.shift : 0, a = anchorOf(d);
-    P.forEach(([off, txt, temp]) => { let note = "";
-      if (temp && b && b.at !== temp) note = ` at ${b.at}°F (recipe says ${temp}°F, so check it ${b.at > temp ? "a few minutes early" : "a few minutes late"})`;
-      rows.push({t: a + off + sh, txt: txt + note, d, temp: temp ? (b ? b.at : temp) : null}); });
-    if (b && !bad.includes(b)) { const end = b.s0 + b.dur + sh;
-      if (!P.some(p => a + p[0] + sh === end)) rows.push({t:end, txt:"Out of the oven", d});
-      if (b.shift <= -15 && b.hold) rows.push({t:end, txt:`Cover with foil to keep warm until ${fmtT(b.a)}`, d});
-      if (b.shift <= -15 && !b.hold) rows.push({t:end, txt:"Best served right away. It comes out early because the oven is full", d}); }
-    if (b && bad.includes(b)) rows.push({t: a - 30, warn:true, txt:`${d.name} won't fit in the oven today. Bake it the day before and rewarm, or ask whoever is bringing it to bring it hot.`});
+    const place = useTray => { for (let end = latest; end >= latest - 8*60; end -= STEP) { const t = fits(b, end, useTray); if (t == null) continue;
+      for (let x = end - b.dur; x < end; x += STEP) { const s = slot(x); s.temp = t; s.n++; slots.set(x, s); }
+      const r = useTray ? trayRange(b, end) : null; if (r) for (let x = Math.floor(r[0]/STEP)*STEP; x < r[1]; x += STEP) tray.set(x, (tray.get(x)||0) + 1);
+      b.shift = end - latest; b.at = t; b.onTray = !!r; b.end = end; return true; } return false; };
+    if (!place(true) && !place(false)) { b.shift = 0; b.at = b.temp; b.bad = true; } });
+  const byId = new Map(blocks.map(b => [b.d.id, b])), cards = [], prep = [];
+  list.forEach(({d, P}) => { const b = byId.get(d.id), sh = b && !b.bad ? b.shift : 0, a = anchorOf(d), k = P.findIndex(p => stepKind(p) !== "prep");
+    P.forEach((p, i) => { if (k < 0 || i < k) prep.push({key:`p_${d.id}_${i}`, t: a + p[0] + sh, txt: p[1], d}); });
+    if (k < 0) return;
+    const first = P[k], kind = stepKind(first), t = a + first[0] + sh, mins = kind === "oven" && b ? b.mins : (+first[3] || 0);
+    const steps = P.slice(k+1).map((p, j) => ({key:`s_${d.id}_${k+1+j}`, t: a + p[0] + sh, txt: p[1], temp: stepKind(p) === "oven" && b ? b.at : null}));
+    const out = mins ? t + mins : null;
+    cards.push({d, key: d.id, t, kind, txt: first[1], temp: kind === "oven" && b ? b.at : null, recTemp: kind === "oven" ? first[2] : null, mins, out, steps,
+      tray: !!(b && b.onTray), trayN: b && b.onTray ? (tray.get(b.end) || 1) : 0,
+      foil: !!(b && !b.bad && !b.onTray && b.hold && b.shift <= -15 && !NO_TRAY.includes(d.recipe)), rush: !!(b && !b.bad && !b.hold && b.shift <= -15), bad: !!(b && b.bad), wait: b && !b.bad ? b.a : null});
   });
-  const ts = [...slots.keys()].sort((x,y) => x-y); let prev = null;
-  ts.forEach((t,i) => { const s = slots.get(t); const gap = i && t - ts[i-1] > STEP;
-    if (s.temp !== prev || gap) { rows.push({t, oven:true, txt:`Oven to ${s.temp}°F`}); prev = s.temp; } });
-  if (hasC("Breakfast")) rows.push({t:bfast, ms:true, txt:"Breakfast is served"});
-  if (hasC("Appetizers")) rows.push({t:apps, ms:true, txt:"Guests arrive. Apps out"});
-  if (mains) rows.push({t:dinner, ms:true, txt:"Dinner on the table"});
-  const isToday = e.date === todayISO(), nowM = isToday ? new Date().getHours()*60 + new Date().getMinutes() : null;
-  if (isToday && rows.length) rows.push({t: nowM, now:true});
-  rows.sort((a,b) => a.t - b.t || (b.oven?1:0) - (a.oven?1:0) || (a.ms?1:0) - (b.ms?1:0));
-  if (!rows.some(r => r.d)) html += `<div class="empty"><b>No day-of cooking for ${esc(e.name)}</b>None of its dishes have oven or stove steps on the day.</div>`;
-  else html += `<div class="card soft"><div class="list tl">${rows.map(r => r.now ? `<div class="row nowline"><span class="time">Now</span><div class="main"></div></div>`
-    : r.ms ? `<div class="row ms"><span class="time">${fmtT(r.t)}</span><div class="main"><div class="t">${esc(r.txt)}</div></div></div>`
-    : r.oven ? `<div class="row ovenrow ${nowM!=null&&r.t<nowM?"pastrow":""}"><span class="time">${fmtT(r.t)}</span><div class="main"><div class="t">${esc(r.txt)}</div></div></div>`
-    : r.warn ? `<div class="row"><span class="time">${fmtT(r.t)}</span><div class="main"><div class="s clash">${esc(r.txt)}</div></div></div>`
-    : `<div class="row ${nowM!=null&&r.t<nowM?"pastrow":""}"><span class="time">${fmtT(r.t)}</span><div class="main"><div class="t">${esc(r.d.name)}</div><div class="s">${esc(r.txt)}</div>${byOther(r.d)?`<span class="pill">${esc(r.d.who)} bringing</span>`:""}${r.temp?`<span class="pill oven">Oven ${r.temp}°F</span>`:""}</div>${R[r.d.recipe]?`<button class="pill link" data-act="cook" data-id="${r.d.recipe}">Cook</button>`:""}</div>`).join("")}</div></div>`;
-  const untimed = mineD.filter(d => !TIMING[d.recipe]), others = dishes.filter(d => byOther(d) && !ovenSteps(d));
-  if (untimed.length) html += `<h2 class="eyebrow">No day-of cooking</h2><p class="note">${untimed.map(d => esc(d.name)).join(", ")}. Made ahead, bought, or no timing set yet.</p>`;
-  if (others.length) html += `<h2 class="eyebrow">Brought ready to serve</h2><p class="note">${others.map(d => `${esc(d.name)} (${esc(d.who)})`).join(", ")}</p>`;
-  return html + `<p class="note">Planned for one oven, ${cap} dish${cap>1?"es":""} at a time, one temperature at a time. Change a time above and everything shifts.</p>`;
+  const temps = []; let prev = null; const ts = [...slots.keys()].sort((x,y) => x-y);
+  ts.forEach((t,i) => { const s = slots.get(t), gap = i && t - ts[i-1] > STEP; if (s.temp !== prev || gap) { temps.push({t, temp:s.temp, up: prev == null || gap || s.temp > prev}); prev = s.temp; } });
+  return {cards, prep, temps, dinner, apps, bfast, cap, trayCap, has, dishes, anchorOf};
 }
+
+function vDay(){
+  const evs = scopeEvs().filter(e => S.dishes.some(d => d.eventId === e.id) || S.tasks.some(t => t.eventId === e.id && t.date === e.date));
+  if (!evs.length) return `<div class="empty"><b>Nothing planned for the day yet</b>Add dishes on the Menu tab and the day's run sheet shows up here.</div>`;
+  const e = evs.find(x => x.id === U.dayEv) || evs.find(x => daysTo(x.date) >= 0) || evs[0];
+  const P = dayPlan(e), C = dayDoc(e), {dinner, apps, bfast} = P;
+  const isToday = e.date === todayISO(), nowD = new Date(), nowM = isToday ? nowD.getHours()*60 + nowD.getMinutes() : null;
+  const mains = P.dishes.some(d => !["Appetizers","Breakfast","Drinks","Dessert"].includes(d.course||"Other"));
+  const dck = (on, act, id, label, cls = "") => `<button class="ck dck ${cls}" role="checkbox" aria-checked="${!!on}" aria-label="${esc(label)}" data-act="${act}" data-id="${esc(id)}">${on ? CHECK : ""}</button>`;
+  const words = s => norm(s).split(" ").filter(x => x.length > 3);
+  /* Left: to-dos, in four parts of the day. */
+  const blockOf = m => m < 11*60 ? "morning" : m < apps ? "before" : m < dinner - 30 ? "guests" : "dinner";
+  const BL = [["morning","Morning", P.has("Breakfast") ? `Breakfast at ${fmtT(bfast)}` : "Before 11 AM"], ["before","Before guests", P.has("Appetizers") ? `Apps out by ${fmtT(apps)}` : `Until ${fmtT(apps)}`], ["guests","Guests here", `${fmtS(apps)} to ${fmtT(dinner-30)}`], ["dinner","Dinner", mains ? `On the table at ${fmtT(dinner)}` : `From ${fmtT(dinner-30)}`]];
+  const tasks = S.tasks.filter(x => x.eventId === e.id && x.date === e.date).map(x => ({task:x, t: hm(x.t), done: !!x.done, b: x.block || (hm(x.t) != null ? blockOf(hm(x.t)) : "morning")}));
+  const preps = P.prep.map(p => ({prep:p, t:p.t, done: !!C["x_" + p.key], b: blockOf(p.t)}));
+  const rowsL = tasks.concat(preps);
+  const curB = nowM == null ? null : blockOf(nowM);
+  const rowHtml = r => { const late = nowM != null && r.t != null && !r.done && r.t + 15 < nowM;
+    if (r.task) { const x = r.task;
+      return `<div class="rrow ${r.done?"done":""} ${late?"late":""}">${dck(r.done, "task", x.id, x.title)}<div class="dmain tapedit" data-act="edittask" data-id="${x.id}"><div class="dt">${esc(x.title)}</div>${x.detail ? `<div class="ds">${esc(x.detail)}</div>` : ""}</div>${r.t != null ? `<span class="dtime">${fmtS(r.t)}</span>` : ""}${whoBtn("tasks", x.id, x.who)}</div>`; }
+    const p = r.prep, dw = words(p.d.name), show = !dw.some(w2 => words(p.txt).includes(w2));
+    return `<div class="rrow ${r.done?"done":""} ${late?"late":""}">${dck(r.done, "dchk", e.id + "|x_" + p.key, p.txt)}<div class="dmain"><div class="dt">${esc(p.txt)}</div>${show ? `<div class="ds">${esc(p.d.name)}</div>` : ""}</div><span class="dtime">${fmtS(r.t)}</span></div>`; };
+  const left = BL.map(([k, label, sub]) => { const rs = rowsL.filter(r => r.b === k).sort((a,b) => (a.t ?? 1e4) - (b.t ?? 1e4) || (a.task ? a.task.title : a.prep.txt).localeCompare(b.task ? b.task.title : b.prep.txt));
+    if (!rs.length && k !== "morning") return "";
+    return `<section class="dblock ${curB === k ? "cur" : ""}"><header><h3>${label}</h3><span>${esc(sub)}</span></header>${rs.length ? rs.map(rowHtml).join("") : `<p class="dnone">Nothing yet</p>`}</section>`; }).join("");
+  const addForm = `<form class="add rsadd" data-form="daytodo" data-ev="${e.id}"><input type="text" id="dtn" placeholder="Add a to-do" required autocomplete="off"><select id="dtb" aria-label="When">${BL.map(([k,l]) => `<option value="${k}" ${k===(curB||"morning")?"selected":""}>${l}</option>`).join("")}</select><button class="btn">Add</button></form>`;
+  /* Right: what cooks, with timers. */
+  const now = Date.now();
+  const card = c => { const on = !!C["x_c_" + c.key], st = +C["tm_" + c.key] || 0, run = st && !on, d = c.d, ms = c.mins * 60000, rem = run ? st + ms - now : 0;
+    const kindPill = c.kind === "oven" ? `<span class="pill oven">${c.temp}°F</span>` : `<span class="pill kind">${KIND[c.kind]}</span>`;
+    const note = c.kind === "oven" && c.recTemp && c.temp !== c.recTemp ? `<div class="onote">At ${c.temp}°F with the other dishes (recipe says ${c.recTemp}°F), so check it ${c.temp > c.recTemp ? "a few minutes early" : "a few minutes late"}.</div>` : "";
+    const after = c.bad ? `<div class="onote warn">${esc(d.name)} doesn't fit in the oven with everything else. Bake it the day before and rewarm, or move a time above.</div>`
+      : c.tray ? `<div class="onote tray">Then onto the warming tray until ${fmtT(c.wait)}${P.trayCap ? ` · ${c.trayN} of ${P.trayCap} spots` : ""}</div>`
+      : c.foil ? `<div class="onote">Then cover with foil to keep warm until ${fmtT(c.wait)}</div>`
+      : c.rush ? `<div class="onote">Best served right away. It comes out early because the oven is full.</div>` : "";
+    const steps = c.steps.length ? `<ul class="osteps">${c.steps.map(s => { const so = !!C["x_" + s.key]; return `<li class="${so?"done":""}">${dck(so, "dchk", e.id + "|x_" + s.key, s.txt, "sm")}<span class="st">${fmtS(s.t)}</span><span class="sx">${esc(s.txt)}${s.temp ? ` <span class="pill oven">${s.temp}°F</span>` : ""}</span></li>`; }).join("")}</ul>` : "";
+    const timer = !c.mins || on ? "" : run ? `<div class="otimer ${rem <= 0 ? "ding" : ""}"><span class="tmv" data-tm="${st}" data-dur="${ms}" data-name="${esc(d.name)}">${clock(rem)}</span><span class="tmx">${c.kind === "crock" ? "until the temperature check" : "left"}</span><button class="btn sm ghost" data-act="dplus" data-id="${e.id}|${c.key}">+5 min</button><button class="btn sm quiet" data-act="dtimer" data-id="${e.id}|${c.key}">Stop</button></div>`
+      : `<button class="btn tstart" data-act="dtimer" data-id="${e.id}|${c.key}">Start ${durLabel(c.mins)} timer</button>`;
+    const outTxt = c.out == null ? "" : c.kind === "crock" ? `Check ${fmtS(c.out)}` : `Out ${fmtS(c.out)}`;
+    return `<div class="ocard k-${c.kind} ${on?"done":""} ${run?"run":""} ${nowM != null && c.out != null && c.out < nowM && on ? "past" : ""}">
+      <div class="ohead"><span class="otime">${fmtS(c.t)}</span><div class="otitle"><b>${esc(d.name)}</b><span>${esc(c.txt)}</span></div>${dck(on, "dchk", e.id + "|x_c_" + c.key, (c.kind === "oven" ? "Out of the oven: " : "Done: ") + d.name)}</div>
+      <div class="ometa">${kindPill}${c.mins ? `<span class="pill">${durLabel(c.mins)}</span>` : ""}${outTxt ? `<span class="pill">${outTxt}</span>` : ""}${byOther(d) ? `<span class="pill">${esc(d.who)}'s</span>` : ""}${R[d.recipe] ? `<button class="pill link" data-act="recipe" data-id="${d.recipe}">Recipe</button>` : ""}</div>
+      ${note}${steps}${after}${timer}</div>`; };
+  const rowsR = P.cards.map(c => ({t:c.t, html:card(c)}))
+    .concat(P.temps.map(x => x.up ? {t:x.t - 15, o:1, html:`<div class="otemp"><span>${fmtS(x.t - 15)}</span>Preheat the oven to ${x.temp}°F</div>`} : {t:x.t, o:1, html:`<div class="otemp"><span>${fmtS(x.t)}</span>Oven down to ${x.temp}°F</div>`}))
+    .concat([P.has("Breakfast") && {t:bfast, o:2, html:`<div class="oms"><span>${fmtS(bfast)}</span>Breakfast is served</div>`}, P.has("Appetizers") && {t:apps, o:2, html:`<div class="oms"><span>${fmtS(apps)}</span>Guests arrive. Apps out</div>`}, mains && {t:dinner, o:2, html:`<div class="oms"><span>${fmtS(dinner)}</span>Dinner on the table</div>`}].filter(Boolean));
+  if (nowM != null) rowsR.push({t:nowM, o:3, html:`<div class="onow" id="daynow"><span>Now · ${fmtS(nowM)}</span></div>`});
+  rowsR.sort((a,b) => a.t - b.t || (b.o||0) - (a.o||0));
+  const right = P.cards.length ? rowsR.map(r => r.html).join("") : `<div class="empty"><b>Nothing cooks on the day</b>None of the dishes have oven, crock pot or stove steps.</div>`;
+  /* Header: the anchors and the counts. */
+  const total = rowsL.length + P.cards.length, done = rowsL.filter(r => r.done).length + P.cards.filter(c => C["x_c_" + c.key]).length;
+  let html = evs.length > 1 ? `<div class="chips" style="margin-top:12px">${evs.map(x => `<button class="chip" aria-pressed="${x.id===e.id}" data-act="dayev" data-id="${x.id}">${esc(x.short||x.name)}</button>`).join("")}</div>` : "";
+  html += `<div class="dayhead"><div><p class="eyebrow">${isToday ? "Today" : fmt(e.date,{weekday:"long",month:"long",day:"numeric"})}</p><h2>${esc(e.name)}</h2><p class="dcount"><b>${done}</b> of ${total} done</p></div>
+    <div class="times">${P.has("Breakfast") ? `<label>Breakfast<input type="time" id="t-bf" data-set="breakfastAt" data-ev="${e.id}" value="${m2hm(bfast)}"></label>` : ""}${P.has("Appetizers") ? `<label>Apps out by<input type="time" id="t-apps" data-set="appsAt" data-ev="${e.id}" value="${m2hm(apps)}"></label>` : ""}${mains ? `<label>Dinner<input type="time" id="t-din" data-set="dinnerAt" data-ev="${e.id}" value="${m2hm(dinner)}"></label>` : ""}
+      <label>Oven fits<select id="t-cap" data-set="ovenCap" data-ev="${e.id}">${[1,2,3,4,5].map(n => `<option value="${n}" ${n===P.cap?"selected":""}>${n} dish${n>1?"es":""}</option>`).join("")}</select></label>
+      <label>Warming tray<select id="t-tray" data-set="trayCap" data-ev="${e.id}">${[0,1,2,3,4,5,6].map(n => `<option value="${n}" ${n===P.trayCap?"selected":""}>${n ? `${n} pan${n>1?"s":""}` : "None"}</option>`).join("")}</select></label></div></div>`;
+  html += `<div class="daywrap"><div class="dayof"><div class="dcol"><h2 class="dcolh">To-dos</h2>${left}${addForm}</div><div class="dcol oven"><h2 class="dcolh">Oven, crock pot &amp; stove</h2>${right}</div></div></div>`;
+  const mine = P.dishes.filter(d => !byOther(d)), untimed = mine.filter(d => !stepsOf(d) && !["Drinks"].includes(d.course||"")), brought = P.dishes.filter(d => byOther(d) && !P.cards.some(c => c.d.id === d.id) && !P.prep.some(p => p.d.id === d.id));
+  if (untimed.length) html += `<h2 class="eyebrow">Nothing to cook on the day</h2><p class="note">${untimed.map(d => esc(d.name)).join(", ")}. Made ahead, bought, or no timing set yet.</p>`;
+  if (brought.length) html += `<h2 class="eyebrow">Others have these</h2><p class="note">${brought.map(d => `${esc(d.name)} (${esc(d.who)})`).join(", ")}</p>`;
+  return html + `<p class="note">The oven plan fits ${P.cap} dish${P.cap>1?"es":""} at a time at one temperature${P.trayCap ? `, with ${P.trayCap} pans on the warming tray` : ""}. Change a time above and everything shifts. Each timer runs on every screen that has this page open.</p>`;
+}
+const clock = ms => { if (ms <= 0) return "Done"; const s = Math.ceil(ms/1000), h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return h ? `${h}:${pad(m)}:${pad(x)}` : `${m}:${pad(x)}`; };
+/* Day-of timers tick on their own so the page doesn't redraw every second. Each device rings once when a timer it shows runs out. */
+const rung = new Set();
+setInterval(() => { const els = document.querySelectorAll("[data-tm]"); if (!els.length) return; const now = Date.now();
+  els.forEach(el => { const st = +el.dataset.tm, left = st + (+el.dataset.dur) - now; el.textContent = clock(left);
+    const box = el.closest(".otimer"); if (box) box.classList.toggle("ding", left <= 0);
+    const k = el.dataset.tm + "|" + el.dataset.dur; if (left <= 0 && left > -90000 && !rung.has(k)) { rung.add(k); ring(); toast(`${el.dataset.name}: time's up`); } }); }, 1000);
 
 /* ───────────────────────── 4. Cookbook + cooking mode ───────────────────────── */
 function vCookbook(){
@@ -1079,6 +1147,11 @@ document.addEventListener("click", async ev => {
     case "task": { const x = S.tasks.find(t => t.id === id); if (x) w("tasks", id, {done:!x.done}); break; }
     case "dish": { const x = S.dishes.find(t => t.id === id); if (x) w("dishes", id, {ready:!x.ready}); break; }
     case "extra": { const x = S.extras.find(t => t.id === id); if (x) w("extras", id, {done:!x.done}); break; }
+    case "dchk": case "dtimer": case "dplus": { const [eid, k] = id.split("|"), doc = "day:" + eid, cur = S.checks[doc]; let data;
+      if (a === "dchk") { data = {[k]: !(cur && cur[k])}; if (/^x_c_/.test(k) && data[k]) data["tm_" + k.slice(4)] = 0; }
+      else { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch(e) {}
+        const st = +((cur || {})["tm_" + k]) || 0; data = {["tm_" + k]: a === "dplus" ? (st ? st + 300000 : Date.now()) : (st ? 0 : Date.now())}; }
+      if (cur) w("checks", doc, data); else w("checks", doc, data, "set"); break; }
     case "chk": { const [eid,k] = id.split("|"); const c = S.checks[eid]; if (c) w("checks", eid, {[k]:!c[k]}); else w("checks", eid, {[k]:true}, "set"); break; }
     case "rsvp": { const x = S.guests.find(t => t.id === id); if (x) w("guests", id, {rsvp:{maybe:"yes",yes:"no",no:"maybe"}[x.rsvp||"maybe"]}); break; }
     case "ritem": { const [rid,item] = id.split("|"); const r = S.rooms.find(x => x.id === rid); if (r) w("rooms", rid, {items:{...(r.items||{}), [item]:!(r.items||{})[item]}}); break; }
@@ -1111,7 +1184,7 @@ document.addEventListener("click", async ev => {
 });
 document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; } if (e.key === "Escape") { if (COOK) stopCook(); else $("#overlay").innerHTML = ""; } });
 document.addEventListener("input", e => { if (e.target.id === "cb-q") { U.q = e.target.value; render(); } });
-document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("pname")) { const n = e.target.value.trim(); if (n) w("people", e.target.dataset.id, {name:n}); return; } const i = e.target.closest("[data-set]"); if (!i || !i.value) return; w("events", i.dataset.ev, {[i.dataset.set]: i.dataset.set === "ovenCap" ? +i.value : i.value}); });
+document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("pname")) { const n = e.target.value.trim(); if (n) w("people", e.target.dataset.id, {name:n}); return; } const i = e.target.closest("[data-set]"); if (!i || !i.value) return; w("events", i.dataset.ev, {[i.dataset.set]: ["ovenCap","trayCap"].includes(i.dataset.set) ? +i.value : i.value}); });
 document.addEventListener("submit", async e => {
   e.preventDefault(); const f = e.target.dataset.form, v = s => ($(s) ? $(s).value : "").trim();
   if (e.target.id === "capform") { const t = v("#capin"); if (!t) return; $("#capin").value = ""; submitCapture(t); return; }
@@ -1120,6 +1193,7 @@ document.addEventListener("submit", async e => {
   if (f === "listlink") { await w("lists", e.target.dataset.id, {link: v("#ll")}); toast("Link saved"); U.editList = false; }
   if (f === "list" && v("#nl")) { const name = v("#nl"); const id = await add("lists", {name, order:S.lists.length, createdAt:Date.now()}); if (id) { U.listId = id; ls.set("hph_list", id); } }
   if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe: recipe || recipeFor(title), note:v("#dn-note"), time:v("#dn-time"), link:v("#dn-link")}, "set"); U.editDinner = null; toast("Saved"); }
+  if (f === "daytodo" && v("#dtn")) { const ev = evById(e.target.dataset.ev); if (ev) { await add("tasks", {eventId:ev.id, title:v("#dtn"), date:ev.date, time:"", t:"", block:v("#dtb") || "morning", cat:"food", detail:"", recipe:recipeFor(v("#dtn")), who:"", done:false}); const i = $("#dtn"); if (i) { i.value = ""; i.focus(); } } return; }
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
   if (f === "dayadd" && v("#da-text") && U.add) { const d = e.target.dataset.date, text = v("#da-text"), tm = v("#da-time"), k = U.add.kind;
     if (k === "dinner") { const cur = S.dinners[d] || {}; await w("dinners", d, {...cur, title:text, recipe:recipeFor(text), note:cur.note || "", time:cur.time || "", link:cur.link || ""}, "set"); }
