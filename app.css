@@ -781,3 +781,31 @@ body.dragging,body.dragging *{cursor:grabbing!important}
 .otimer{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center}
 .otimer .tmv{min-width:0}.otimer .tmx{margin:0}
 .otimer .btn{padding-inline:12px}
+/* Day by day: a strip of the days leading up to the weekend. */
+.daychips{display:flex;gap:8px;overflow-x:auto;margin:14px 0 4px;padding:2px 2px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.daychips::-webkit-scrollbar{display:none}
+.daychips button{flex:0 0 auto;min-width:96px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px 14px;border-radius:16px;border:1px solid var(--line);background:var(--raised);cursor:pointer;text-align:left;font-family:var(--sans)}
+.daychips b{font-size:16px;font-weight:500}
+.daychips span{font-size:13px;color:var(--muted)}
+.daychips i{font-style:normal;font-size:12px;font-weight:500;color:var(--clay);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.daychips em{font-style:normal;font-size:12px;color:var(--green);margin-top:2px}
+.daychips button.past{opacity:.7}
+.daychips button.today b{color:var(--clay)}
+.daychips button[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.daychips button[aria-selected="true"] span,.daychips button[aria-selected="true"] em{color:#E9E3D9}
+.daychips button[aria-selected="true"] i{color:#F6C9AE}
+.daychips button[aria-selected="true"].today b{color:#fff}
+.dayof.one{grid-template-columns:minmax(0,1fr) !important;max-width:760px}
+.dnone.big{font-size:18px;padding:12px 2px}
+.ds.tag{color:var(--clay);font-weight:500}
+.dblock.over header{border-bottom-color:var(--warn)}.dblock.over header h3{color:var(--warn)}
+.rrow .x{flex:0 0 36px;width:36px;height:36px;font-size:24px;color:var(--faint);margin-left:-4px}
+.rrow .x.arm{width:auto;flex-basis:auto;font-size:13px}
+.ocard.k-micro{border-left-color:var(--gold)}.ocard.k-micro .otime{color:var(--gold)}
+/* Two columns side by side: each scrolls on its own, sized to the screen, headings pinned. */
+@container (min-width:680px){
+  .dayof:not(.one) .dcol{position:sticky;top:6px;max-height:calc(100dvh - 118px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-top:0}
+  .dayof:not(.one) .dcolh{position:sticky;top:0;z-index:2;margin:0 -18px 0;padding:14px 18px 8px;background:inherit;border-bottom:1px solid var(--line)}
+  .dayof:not(.one) .dcol .dcolh{background:#FFFEFB}
+  .dayof:not(.one) .dcol.oven .dcolh{background:var(--card)}
+}

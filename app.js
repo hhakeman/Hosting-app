@@ -7,7 +7,7 @@
 const CB = window.COOKBOOK || {recipes:{}, timing:{}, flex:{}, category:{}};
 const R = CB.recipes, TIMING = CB.timing, FLEX = CB.flex, RCAT = CB.category;
 const COURSES = ["Breakfast","Appetizers","Dinner","Sides","Dessert","Drinks","Other"];
-const HTABS = [["plan","Checklist"],["menu","Menu"],["day","Day-of"],["shop","Shop"],["guests","Guests"],["rooms","Rooms"]];
+const HTABS = [["plan","Checklist"],["menu","Menu"],["day","Day by day"],["shop","Shop"],["guests","Guests"],["rooms","Rooms"]];
 const CATS = [["invites","Invites"],["reservations","Reservations"],["rooms","Rooms"],["house","House"],["food","Food"],["freezer","Freezer"]];
 const ROOM_ITEMS = ["Fresh sheets","Towels","Extra blanket","Chocolate on the pillow"];
 const WK_NAMES = {thanksgiving:"Thanksgiving", christmas:"Christmas"};
@@ -238,13 +238,16 @@ function render(){
   const ideaIds = S.lists.filter(isIdeasList).map(l => l.id), counts = {lists: S.items.filter(i => !i.done && !ideaIds.includes(i.listId)).length, hosting: S.tasks.filter(t => !t.done && daysTo(t.date||todayISO()) <= 7).length};
   setHTML($("#nav"), VIEWS.map(([k,l]) => `<button class="nav-item nav-${k}" role="tab" aria-selected="${U.view===k || (k==="meals" && (U.view==="dinners" || U.view==="cookbook")) || (k==="today" && U.view==="plans")}" data-act="view" data-id="${k}">${svg(k)}<span>${l}</span>${counts[k] ? `<span class="n">${counts[k]}</span>` : ""}</button>`).join(""));
   $("#railfoot").innerHTML = `${ready && db ? `<button class="hh-btn" data-act="people" aria-label="The household">${people().length ? `<span class="avs">${people().map(p => avatar(p, "sm")).join("")}</span>Household` : `${svg("person")}Add the household`}</button>` : ""}${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}<br>${ready ? (db ? "Shared with the household" : "Not signed in") : "Loading…"}`;
-  const key = [U.view, U.listId, U.wk, U.sub, U.htab, U.weekOff, U.calMode, U.calOff].join("|");
   let body;
   if (!ready) body = `<p class="status">Loading the house…</p>`;
   else if (noDb) body = `<div class="empty"><b>Sign in to claude.ai</b>Your lists, dinners and hosting plans live in the shared database. Sign in and reopen this page.</div>`;
   else body = ({today:vToday, cal:vCal, lists:vLists, dinners:vDinners, hosting:vHosting, cookbook:vCookbook, plans:vPlans})[U.view]();
+  const key = [U.view, U.listId, U.wk, U.sub, U.htab, U.weekOff, U.calMode, U.calOff, U.dayDate].join("|"); // after the view ran, so a default it picked counts
   const sc = $("#main");
+  // Same screen: put every scroll position back after the redraw (iPad Safari otherwise jumps to the top when a checkbox redraws the page).
+  const keep = render.k === key ? {top: sc.scrollTop, cols: [...sc.querySelectorAll("[data-keepscroll]")].map(el => [el.dataset.keepscroll, el.scrollTop])} : null;
   setHTML(sc, `<div class="wrap v-${U.view} ${U.view === "cal" ? "wide" : ""}">${body}</div>`);
+  if (keep) { const back = () => { if (Math.abs(sc.scrollTop - keep.top) > 1) sc.scrollTop = keep.top; keep.cols.forEach(([k, y]) => { const el = sc.querySelector(`[data-keepscroll="${k}"]`); if (el && Math.abs(el.scrollTop - y) > 1) el.scrollTop = y; }); }; back(); requestAnimationFrame(back); }
   if (render.k !== key) { sc.scrollTop = 0; render.k = key; }
   if (ready && U.view === "hosting" && U.htab === "day") keepAwake(true); else if (!COOK && wake) keepAwake(false);
 }
@@ -652,7 +655,7 @@ function vHosting(){
   const range = first.date === last.date ? fmt(first.date,{weekday:"long",month:"long",day:"numeric"}) : `${fmt(first.date)} – ${fmt(last.date)}`;
   const one = U.sub !== "all" ? evById(U.sub) : null;
   const head = `<div class="ph"><div><h1>Hosting</h1></div><div class="seg" role="tablist" aria-label="Holiday">${wks.map(x => `<button role="tab" aria-pressed="${x.k===U.wk}" data-act="wk" data-id="${x.k}">${esc(WK_NAMES[x.k] || x.evs[0].name)}</button>`).join("")}</div></div>
-    <div class="chips evchips" role="tablist" aria-label="Events"><button class="chip" aria-pressed="${U.sub==="all"}" data-act="sub" data-id="all">All</button>${evs.map(e => `<button class="chip" aria-pressed="${U.sub===e.id}" data-act="sub" data-id="${e.id}">${esc(e.short||e.name)}</button>`).join("")}</div>
+    ${U.htab === "day" ? "" : `<div class="chips evchips" role="tablist" aria-label="Events"><button class="chip" aria-pressed="${U.sub==="all"}" data-act="sub" data-id="all">All</button>${evs.map(e => `<button class="chip" aria-pressed="${U.sub===e.id}" data-act="sub" data-id="${e.id}">${esc(e.short||e.name)}</button>`).join("")}</div>`}
     ${U.htab === "day" ? "" : `<div class="card sum"><div class="host-card"><div><div class="name">${esc(one ? one.name : wkName())}</div><div class="when">${one ? `${fmt(one.date,{weekday:"long",month:"long",day:"numeric"})}${one.time ? " · " + esc(one.time) : ""}` : range}</div>${one && one.theme ? `<div class="sum-th">${esc(one.theme)}</div>` : ""}</div>
       <div class="count"><b>${n < 0 ? "Done" : n}</b><span>${n < 0 ? "" : n === 1 ? "day to go" : "days to go"}</span></div></div>
       <div class="stats"><span><b>${done}/${tasks.length}</b> to-dos done</span><span><b>${yes}/${gAll.length}</b> guests confirmed</span></div><div class="bar"><i style="width:${tasks.length ? Math.round(done/tasks.length*100) : 0}%"></i></div></div>`}
@@ -738,15 +741,16 @@ const fmtS = m => fmtT(m).replace(/ (AM|PM)$/, "");
 function to24(s){ const m = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(s||""); if (!m) return ""; let h = +m[1]; if (m[3]) { const pm = /pm/i.test(m[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; } return pad(h) + ":" + (m[2]||"00"); }
 const durLabel = m => { m = Math.round(m); const h = Math.floor(m/60), r = m%60; return h ? `${h} hr${r ? ` ${r} min` : ""}` : `${r} min`; };
 const NO_TRAY = ["Turducken","Ham","Tenderloin","Bread","RoastedGarlic","Rolls","Caviar","CroissantBake"];
-const stepsOf = d => Array.isArray(d.timing) && d.timing.length ? d.timing.map(s => Array.isArray(s) ? s : [+s.at, s.txt || "", s.temp == null ? null : +s.temp, s.mins == null ? null : +s.mins, s.kind || ""]) : (TIMING[d.recipe] || null);
+// A dish's own timing wins over the cookbook's; an empty list means "nothing to do on the day" (bought, or made ahead and served as is).
+const stepsOf = d => Array.isArray(d.timing) ? (d.timing.length ? d.timing.map(s => Array.isArray(s) ? s : [+s.at, s.txt || "", s.temp == null ? null : +s.temp, s.mins == null ? null : +s.mins, s.kind || ""]) : null) : (TIMING[d.recipe] || null);
 const flexOf = d => Array.isArray(d.flex) && d.flex.length === 3 ? d.flex : FLEX[d.recipe];
-const stepKind = p => typeof p[2] === "number" && p[2] > 0 ? "oven" : p[4] === "crock" || /crock ?pot/i.test(p[1]) ? "crock" : /broil/i.test(p[1]) ? "broil" : p[4] === "stove" || /\b(stove|boil|simmer|sear|skillet)/i.test(p[1]) ? "stove" : "prep";
-const KIND = {crock:"Crock pot", stove:"Stove", broil:"Broiler"};
+const stepKind = p => typeof p[2] === "number" && p[2] > 0 ? "oven" : ["crock","stove","micro","broil"].includes(p[4]) ? p[4] : p[4] === "crock" || /crock ?pot/i.test(p[1]) ? "crock" : p[4] === "micro" || /microwave/i.test(p[1]) ? "micro" : /broil/i.test(p[1]) ? "broil" : p[4] === "stove" || /\b(stove|boil|simmer|sear|skillet)/i.test(p[1]) ? "stove" : "prep";
+const KIND = {crock:"Crock pot", stove:"Stove", broil:"Broiler", micro:"Microwave"};
 const dayDoc = e => S.checks["day:" + e.id] || {};
 
 function dayPlan(e){
   const dishes = S.dishes.filter(d => d.eventId === e.id);
-  const cookSteps = d => { let P = stepsOf(d); if (!P || !P.length) return null; if (byOther(d)) { const k = P.findIndex(p => stepKind(p) === "oven"); if (k < 0) return null; P = P.slice(k); } return P; };
+  const cookSteps = d => { let P = stepsOf(d); if (!P || !P.length) return null; if (byOther(d) && !Array.isArray(d.timing)) { const k = P.findIndex(p => stepKind(p) === "oven"); if (k < 0) return null; P = P.slice(k); } return P; }; // someone else makes it: from the cookbook, only what happens in this oven
   const list = dishes.map(d => ({d, P: cookSteps(d)})).filter(x => x.P);
   const has = c => dishes.some(d => (d.course||"Other") === c);
   const dinner = hm(e.dinnerAt) ?? hm(to24(e.time)) ?? 18*60;
@@ -792,67 +796,88 @@ function dayPlan(e){
   return {cards, prep, temps, dinner, apps, bfast, cap, trayCap, has, dishes, anchorOf};
 }
 
+/* Day by day: the days leading up to a holiday weekend, one at a time. Each day is a checklist of everything dated that day (hosting
+   and household to-dos together). A day with a hosting event becomes the run sheet: to-dos beside the oven, crock pot and stove. */
+function dayRange(){ const evs = wkEvs(); if (!evs.length) return []; const first = evs[0].date, last = evs[evs.length-1].date, out = [];
+  for (let d = addDays(first, -5); d <= last; d = addDays(d, 1)) out.push(d); return out; }
 function vDay(){
-  const evs = scopeEvs().filter(e => S.dishes.some(d => d.eventId === e.id) || S.tasks.some(t => t.eventId === e.id && t.date === e.date));
-  if (!evs.length) return `<div class="empty"><b>Nothing planned for the day yet</b>Add dishes on the Menu tab and the day's run sheet shows up here.</div>`;
-  const e = evs.find(x => x.id === U.dayEv) || evs.find(x => daysTo(x.date) >= 0) || evs[0];
-  const P = dayPlan(e), C = dayDoc(e), {dinner, apps, bfast} = P;
-  const isToday = e.date === todayISO(), nowD = new Date(), nowM = isToday ? nowD.getHours()*60 + nowD.getMinutes() : null;
-  const mains = P.dishes.some(d => !["Appetizers","Breakfast","Drinks","Dessert"].includes(d.course||"Other"));
+  const days = dayRange(); if (!days.length) return `<div class="empty"><b>Nothing planned yet</b>Add an event and its days show up here.</div>`;
+  const t = todayISO(), evAll = wkEvs(), wkIds = evAll.map(e => e.id);
+  if (!days.includes(U.dayDate)) U.dayDate = days.includes(t) ? t : (evAll.find(e => e.date >= t) || evAll[0]).date;
+  const d = U.dayDate, isToday = d === t, nowD = new Date(), nowM = isToday ? nowD.getHours()*60 + nowD.getMinutes() : null;
+  const mine = x => !x.eventId || wkIds.includes(x.eventId);
+  const dayTasks = dd => S.tasks.filter(x => x.date === dd && mine(x));
+  const chips = `<div class="daychips" role="tablist" aria-label="Days">${days.map(dd => { const ev = evAll.filter(e => e.date === dd), open = dayTasks(dd).filter(x => !x.done).length;
+    return `<button role="tab" aria-selected="${dd===d}" class="${dd===t?"today":""} ${ev.length?"ev":""} ${dd<t?"past":""}" data-act="dayd" data-id="${dd}"><b>${dd===t ? "Today" : fmt(dd,{weekday:"short"})}</b><span>${fmt(dd,{month:"short",day:"numeric"})}</span>${ev.length ? `<i>${esc(ev.map(e => e.short||e.name).join(", "))}</i>` : ""}<em>${open ? open + " to do" : "All done"}</em></button>`; }).join("")}</div>`;
+  const evsHere = evAll.filter(e => e.date === d), cookEvs = evsHere.filter(e => S.dishes.some(x => x.eventId === e.id));
+  const e = cookEvs.find(x => x.id === U.dayEv) || cookEvs[0];
   const dck = (on, act, id, label, cls = "") => `<button class="ck dck ${cls}" role="checkbox" aria-checked="${!!on}" aria-label="${esc(label)}" data-act="${act}" data-id="${esc(id)}">${on ? CHECK : ""}</button>`;
   const words = s => norm(s).split(" ").filter(x => x.length > 3);
-  /* Left: to-dos, in four parts of the day. */
-  const blockOf = m => m < 11*60 ? "morning" : m < apps ? "before" : m < dinner - 30 ? "guests" : "dinner";
-  const BL = [["morning","Morning", P.has("Breakfast") ? `Breakfast at ${fmtT(bfast)}` : "Before 11 AM"], ["before","Before guests", P.has("Appetizers") ? `Apps out by ${fmtT(apps)}` : `Until ${fmtT(apps)}`], ["guests","Guests here", `${fmtS(apps)} to ${fmtT(dinner-30)}`], ["dinner","Dinner", mains ? `On the table at ${fmtT(dinner)}` : `From ${fmtT(dinner-30)}`]];
-  const tasks = S.tasks.filter(x => x.eventId === e.id && x.date === e.date).map(x => ({task:x, t: hm(x.t), done: !!x.done, b: x.block || (hm(x.t) != null ? blockOf(hm(x.t)) : "morning")}));
-  const preps = P.prep.map(p => ({prep:p, t:p.t, done: !!C["x_" + p.key], b: blockOf(p.t)}));
-  const rowsL = tasks.concat(preps);
+  const P = e ? dayPlan(e) : null, C = e ? dayDoc(e) : {};
+  /* Parts of the day. On an event day they follow its times; on other days, morning, afternoon, evening. */
+  const BL = P ? [["morning","Morning", P.has("Breakfast") ? `Breakfast at ${fmtT(P.bfast)}` : "Before 11 AM"], ["before", e.appsLabel ? "Before you go" : "Before guests", e.appsLabel ? `${e.appsLabel} at ${fmtT(P.apps)}` : P.has("Appetizers") ? `Apps out by ${fmtT(P.apps)}` : `Until ${fmtT(P.apps)}`], ["guests", e.appsLabel ? "Out" : "Guests here", `${fmtS(P.apps)} to ${fmtT(P.dinner-30)}`], ["dinner", e.dinnerLabel || "Dinner", e.dinnerLabel ? `${e.dinnerLabel} at ${fmtT(P.dinner)}` : `On the table at ${fmtT(P.dinner)}`]]
+    : [["morning","Morning",""],["afternoon","Afternoon",""],["evening","Evening",""],["any","Any time",""]];
+  const blockOf = m => P ? (m < 11*60 ? "morning" : m < P.apps ? "before" : m < P.dinner - 30 ? "guests" : "dinner") : (m < 12*60 ? "morning" : m < 17*60 ? "afternoon" : "evening");
+  const keys = BL.map(b => b[0]), fallback = P ? "morning" : "any";
+  const taskRow = x => ({task:x, t: hm(x.t), done: !!x.done, b: hm(x.t) != null ? blockOf(hm(x.t)) : (keys.includes(x.block) ? x.block : fallback)});
+  const overdue = isToday ? S.tasks.filter(x => !x.done && x.date && x.date < d && x.date >= addDays(days[0], -14) && mine(x)).sort(byDay).map(x => ({...taskRow(x), b:"overdue", late:true})) : [];
+  const preps = P ? P.prep.filter(p => !C["h_" + p.key]).map(p => ({prep:p, t:p.t, done: !!C["x_" + p.key], b: blockOf(p.t)})) : [];
+  const hidden = P ? P.prep.filter(p => C["h_" + p.key]).length : 0;
+  const rowsL = dayTasks(d).map(taskRow).concat(preps);
   const curB = nowM == null ? null : blockOf(nowM);
-  const rowHtml = r => { const late = nowM != null && r.t != null && !r.done && r.t + 15 < nowM;
-    if (r.task) { const x = r.task;
-      return `<div class="rrow ${r.done?"done":""} ${late?"late":""}">${dck(r.done, "task", x.id, x.title)}<div class="dmain tapedit" data-act="edittask" data-id="${x.id}"><div class="dt">${esc(x.title)}</div>${x.detail ? `<div class="ds">${esc(x.detail)}</div>` : ""}</div>${r.t != null ? `<span class="dtime">${fmtS(r.t)}</span>` : ""}${whoBtn("tasks", x.id, x.who)}</div>`; }
+  const addEv = e || evAll.find(x => x.date >= d) || evAll[evAll.length-1]; // the event a new to-do belongs to; to-dos of other events get a tag
+  const rowHtml = r => { const late = r.late || (nowM != null && r.t != null && !r.done && r.t + 15 < nowM);
+    if (r.task) { const x = r.task, ev = x.eventId && evById(x.eventId), other = ev && ev.id !== addEv.id;
+      return `<div class="rrow ${r.done?"done":""} ${late?"late":""}">${dck(r.done, "task", x.id, x.title)}<div class="dmain tapedit" data-act="edittask" data-id="${x.id}"><div class="dt">${esc(x.title)}</div>${x.detail ? `<div class="ds">${esc(x.detail)}</div>` : ""}${other || r.b === "overdue" ? `<div class="ds tag">${r.b === "overdue" ? fmt(x.date) + (other ? " · " : "") : ""}${other ? esc(ev.short || ev.name) : ""}</div>` : ""}</div>${r.t != null && r.b !== "overdue" ? `<span class="dtime">${fmtS(r.t)}</span>` : ""}${whoBtn("tasks", x.id, x.who)}${del("tasks", x.id)}</div>`; }
     const p = r.prep, dw = words(p.d.name), show = !dw.some(w2 => words(p.txt).includes(w2));
-    return `<div class="rrow ${r.done?"done":""} ${late?"late":""}">${dck(r.done, "dchk", e.id + "|x_" + p.key, p.txt)}<div class="dmain"><div class="dt">${esc(p.txt)}</div>${show ? `<div class="ds">${esc(p.d.name)}</div>` : ""}</div><span class="dtime">${fmtS(r.t)}</span></div>`; };
-  const left = BL.map(([k, label, sub]) => { const rs = rowsL.filter(r => r.b === k).sort((a,b) => (a.t ?? 1e4) - (b.t ?? 1e4) || (a.task ? a.task.title : a.prep.txt).localeCompare(b.task ? b.task.title : b.prep.txt));
-    if (!rs.length && k !== "morning") return "";
-    return `<section class="dblock ${curB === k ? "cur" : ""}"><header><h3>${label}</h3><span>${esc(sub)}</span></header>${rs.length ? rs.map(rowHtml).join("") : `<p class="dnone">Nothing yet</p>`}</section>`; }).join("");
-  const addForm = `<form class="add rsadd" data-form="daytodo" data-ev="${e.id}"><input type="text" id="dtn" placeholder="Add a to-do" required autocomplete="off"><select id="dtb" aria-label="When">${BL.map(([k,l]) => `<option value="${k}" ${k===(curB||"morning")?"selected":""}>${l}</option>`).join("")}</select><button class="btn">Add</button></form>`;
-  /* Right: what cooks, with timers. */
-  const now = Date.now();
-  const card = c => { const on = !!C["x_c_" + c.key], st = +C["tm_" + c.key] || 0, run = st && !on, d = c.d, ms = c.mins * 60000, rem = run ? st + ms - now : 0;
+    return `<div class="rrow ${r.done?"done":""} ${late?"late":""}">${dck(r.done, "dchk", e.id + "|x_" + p.key, p.txt)}<div class="dmain"><div class="dt">${esc(p.txt)}</div>${show ? `<div class="ds">${esc(p.d.name)}</div>` : ""}</div><span class="dtime">${fmtS(r.t)}</span><button class="x" data-act="dhide" data-id="${e.id}|${p.key}" aria-label="Remove ${esc(p.txt)}">×</button></div>`; };
+  const sortRows = rs => rs.sort((a,b) => (a.t ?? 1e4) - (b.t ?? 1e4) || (a.task ? a.task.title : a.prep.txt).localeCompare(b.task ? b.task.title : b.prep.txt));
+  const left = (overdue.length ? `<section class="dblock over"><header><h3>Still open</h3><span>From earlier days</span></header>${overdue.map(rowHtml).join("")}</section>` : "")
+    + BL.map(([k, label, sub]) => { const rs = sortRows(rowsL.filter(r => r.b === k));
+      if (!rs.length && (P ? k !== "morning" : true)) return "";
+      return `<section class="dblock ${curB === k ? "cur" : ""}"><header><h3>${label}</h3>${sub ? `<span>${esc(sub)}</span>` : ""}</header>${rs.length ? rs.map(rowHtml).join("") : `<p class="dnone">Nothing yet</p>`}</section>`; }).join("")
+    + (!rowsL.length && !overdue.length && !P ? `<p class="dnone big">Nothing on the list for ${isToday ? "today" : fmt(d,{weekday:"long"})}.</p>` : "")
+    + (hidden ? `<button class="btn sm quiet" data-act="dunhide" data-id="${e.id}">Bring back ${hidden} removed</button>` : "");
+  const addForm = `<form class="add rsadd" data-form="daytodo" data-ev="${addEv.id}" data-date="${d}"><input type="text" id="dtn" placeholder="Add a to-do" required autocomplete="off"><select id="dtb" aria-label="When">${BL.map(([k,l]) => `<option value="${k}" ${k===(curB||fallback)?"selected":""}>${l}</option>`).join("")}</select><button class="btn">Add</button></form>`;
+  const leftCol = `<div class="dcol" data-keepscroll="l"><h2 class="dcolh">To-dos</h2>${left}${addForm}</div>`;
+  const done = rowsL.filter(r => r.done).length + (P ? P.cards.filter(c => C["x_c_" + c.key]).length : 0), total = rowsL.length + (P ? P.cards.length : 0);
+  const title = e ? e.name : isToday ? "Today" : fmt(d,{weekday:"long"}), nextEv = evAll.find(x => x.date > d);
+  let html = chips + `<div class="dayhead"><div><p class="eyebrow">${fmt(d,{weekday:"long",month:"long",day:"numeric"})}${!e && nextEv ? ` · ${esc(nextEv.short||nextEv.name)} in ${daysBetween(d, nextEv.date)} day${daysBetween(d, nextEv.date)===1?"":"s"}` : ""}</p><h2>${esc(title)}</h2><p class="dcount"><b>${done}</b> of ${total} done${overdue.length ? ` · ${overdue.length} still open from earlier` : ""}</p></div>`;
+  if (!P) return html + `</div><div class="daywrap"><div class="dayof one">${leftCol}</div></div>`;
+  /* Event day: the cooking column. */
+  const {dinner, apps, bfast} = P, mains = P.dishes.some(x => !["Appetizers","Breakfast","Drinks","Dessert"].includes(x.course||"Other")), now = Date.now();
+  const card = c => { const on = !!C["x_c_" + c.key], st = +C["tm_" + c.key] || 0, run = st && !on, dd = c.d, ms = c.mins * 60000, rem = run ? st + ms - now : 0;
     const kindPill = c.kind === "oven" ? `<span class="pill oven">${c.temp}°F</span>` : `<span class="pill kind">${KIND[c.kind]}</span>`;
     const note = c.kind === "oven" && c.recTemp && c.temp !== c.recTemp ? `<div class="onote">At ${c.temp}°F with the other dishes (recipe says ${c.recTemp}°F), so check it ${c.temp > c.recTemp ? "a few minutes early" : "a few minutes late"}.</div>` : "";
-    const after = c.bad ? `<div class="onote warn">${esc(d.name)} doesn't fit in the oven with everything else. Bake it the day before and rewarm, or move a time above.</div>`
+    const after = c.bad ? `<div class="onote warn">${esc(dd.name)} doesn't fit in the oven with everything else. Bake it the day before and rewarm, or move a time above.</div>`
       : c.tray ? `<div class="onote tray">Then onto the warming tray until ${fmtT(c.wait)}${P.trayCap ? ` · ${c.trayN} of ${P.trayCap} spots` : ""}</div>`
       : c.foil ? `<div class="onote">Then cover with foil to keep warm until ${fmtT(c.wait)}</div>`
       : c.rush ? `<div class="onote">Best served right away. It comes out early because the oven is full.</div>` : "";
     const steps = c.steps.length ? `<ul class="osteps">${c.steps.map(s => { const so = !!C["x_" + s.key]; return `<li class="${so?"done":""}">${dck(so, "dchk", e.id + "|x_" + s.key, s.txt, "sm")}<span class="st">${fmtS(s.t)}</span><span class="sx">${esc(s.txt)}${s.temp ? ` <span class="pill oven">${s.temp}°F</span>` : ""}</span></li>`; }).join("")}</ul>` : "";
-    const timer = !c.mins || on ? "" : run ? `<div class="otimer ${rem <= 0 ? "ding" : ""}"><span class="tmv" data-tm="${st}" data-dur="${ms}" data-name="${esc(d.name)}">${clock(rem)}</span><span class="tmx">${c.kind === "crock" ? "until the temperature check" : "left"}</span><button class="btn sm ghost" data-act="dplus" data-id="${e.id}|${c.key}">+5 min</button><button class="btn sm quiet" data-act="dtimer" data-id="${e.id}|${c.key}">Stop</button></div>`
+    const timer = !c.mins || on ? "" : run ? `<div class="otimer ${rem <= 0 ? "ding" : ""}"><span class="tmv" data-tm="${st}" data-dur="${ms}" data-name="${esc(dd.name)}">${clock(rem)}</span><span class="tmx">${c.kind === "crock" ? "until the temperature check" : "left"}</span><button class="btn sm ghost" data-act="dplus" data-id="${e.id}|${c.key}">+5 min</button><button class="btn sm quiet" data-act="dtimer" data-id="${e.id}|${c.key}">Stop</button></div>`
       : `<button class="btn tstart" data-act="dtimer" data-id="${e.id}|${c.key}">Start ${durLabel(c.mins)} timer</button>`;
-    const outTxt = c.out == null ? "" : c.kind === "crock" ? `Check ${fmtS(c.out)}` : `Out ${fmtS(c.out)}`;
+    const outTxt = c.out == null ? "" : c.kind === "crock" ? `Check ${fmtS(c.out)}` : c.kind === "oven" ? `Out ${fmtS(c.out)}` : `Done ${fmtS(c.out)}`;
     return `<div class="ocard k-${c.kind} ${on?"done":""} ${run?"run":""} ${nowM != null && c.out != null && c.out < nowM && on ? "past" : ""}">
-      <div class="ohead"><span class="otime">${fmtS(c.t)}</span><div class="otitle"><b>${esc(d.name)}</b><span>${esc(c.txt)}</span></div>${dck(on, "dchk", e.id + "|x_c_" + c.key, (c.kind === "oven" ? "Out of the oven: " : "Done: ") + d.name)}</div>
-      <div class="ometa">${kindPill}${c.mins ? `<span class="pill">${durLabel(c.mins)}</span>` : ""}${outTxt ? `<span class="pill">${outTxt}</span>` : ""}${byOther(d) ? `<span class="pill">${esc(d.who)}'s</span>` : ""}${R[d.recipe] ? `<button class="pill link" data-act="recipe" data-id="${d.recipe}">Recipe</button>` : ""}</div>
-      ${note}${steps}${after}${timer}</div>`; };
+      <div class="ohead"><span class="otime">${fmtS(c.t)}</span><div class="otitle"><b>${esc(dd.name)}</b><span>${esc(c.txt)}</span></div>${dck(on, "dchk", e.id + "|x_c_" + c.key, (c.kind === "oven" ? "Out of the oven: " : "Done: ") + dd.name)}</div>
+      <div class="ometa">${kindPill}${c.mins ? `<span class="pill">${durLabel(c.mins)}</span>` : ""}${outTxt ? `<span class="pill">${outTxt}</span>` : ""}${byOther(dd) ? `<span class="pill">${esc(dd.who)}'s</span>` : ""}${R[dd.recipe] ? `<button class="pill link" data-act="recipe" data-id="${dd.recipe}">Recipe</button>` : ""}</div>
+      ${dd.note && c.kind !== "oven" ? `<div class="onote">${esc(dd.note)}</div>` : ""}${note}${steps}${after}${timer}</div>`; };
   const rowsR = P.cards.map(c => ({t:c.t, html:card(c)}))
     .concat(P.temps.map(x => x.up ? {t:x.t - 15, o:1, html:`<div class="otemp"><span>${fmtS(x.t - 15)}</span>Preheat the oven to ${x.temp}°F</div>`} : {t:x.t, o:1, html:`<div class="otemp"><span>${fmtS(x.t)}</span>Oven down to ${x.temp}°F</div>`}))
-    .concat([P.has("Breakfast") && {t:bfast, o:2, html:`<div class="oms"><span>${fmtS(bfast)}</span>Breakfast is served</div>`}, P.has("Appetizers") && {t:apps, o:2, html:`<div class="oms"><span>${fmtS(apps)}</span>Guests arrive. Apps out</div>`}, mains && {t:dinner, o:2, html:`<div class="oms"><span>${fmtS(dinner)}</span>Dinner on the table</div>`}].filter(Boolean));
+    .concat([P.has("Breakfast") && {t:bfast, o:2, html:`<div class="oms"><span>${fmtS(bfast)}</span>Breakfast is served</div>`}, P.has("Appetizers") && {t:apps, o:2, html:`<div class="oms"><span>${fmtS(apps)}</span>${esc(e.appsLabel || "Guests arrive. Apps out")}</div>`}, mains && {t:dinner, o:2, html:`<div class="oms"><span>${fmtS(dinner)}</span>${esc(e.dinnerLabel || "Dinner on the table")}</div>`}].filter(Boolean));
   if (nowM != null) rowsR.push({t:nowM, o:3, html:`<div class="onow" id="daynow"><span>Now · ${fmtS(nowM)}</span></div>`});
   rowsR.sort((a,b) => a.t - b.t || (b.o||0) - (a.o||0));
   const right = P.cards.length ? rowsR.map(r => r.html).join("") : `<div class="empty"><b>Nothing cooks on the day</b>None of the dishes have oven, crock pot or stove steps.</div>`;
-  /* Header: the anchors and the counts. */
-  const total = rowsL.length + P.cards.length, done = rowsL.filter(r => r.done).length + P.cards.filter(c => C["x_c_" + c.key]).length;
-  let html = evs.length > 1 ? `<div class="chips" style="margin-top:12px">${evs.map(x => `<button class="chip" aria-pressed="${x.id===e.id}" data-act="dayev" data-id="${x.id}">${esc(x.short||x.name)}</button>`).join("")}</div>` : "";
-  html += `<div class="dayhead"><div><p class="eyebrow">${isToday ? "Today" : fmt(e.date,{weekday:"long",month:"long",day:"numeric"})}</p><h2>${esc(e.name)}</h2><p class="dcount"><b>${done}</b> of ${total} done</p></div>
-    <div class="times">${P.has("Breakfast") ? `<label>Breakfast<input type="time" id="t-bf" data-set="breakfastAt" data-ev="${e.id}" value="${m2hm(bfast)}"></label>` : ""}${P.has("Appetizers") ? `<label>Apps out by<input type="time" id="t-apps" data-set="appsAt" data-ev="${e.id}" value="${m2hm(apps)}"></label>` : ""}${mains ? `<label>Dinner<input type="time" id="t-din" data-set="dinnerAt" data-ev="${e.id}" value="${m2hm(dinner)}"></label>` : ""}
+  html += `<div class="times">${P.has("Breakfast") ? `<label>Breakfast<input type="time" id="t-bf" data-set="breakfastAt" data-ev="${e.id}" value="${m2hm(bfast)}"></label>` : ""}${P.has("Appetizers") ? `<label>${e.appsLabel ? "Leave by" : "Apps out by"}<input type="time" id="t-apps" data-set="appsAt" data-ev="${e.id}" value="${m2hm(apps)}"></label>` : ""}${mains ? `<label>${esc(e.dinnerLabel || "Dinner")}<input type="time" id="t-din" data-set="dinnerAt" data-ev="${e.id}" value="${m2hm(dinner)}"></label>` : ""}
       <label>Oven fits<select id="t-cap" data-set="ovenCap" data-ev="${e.id}">${[1,2,3,4,5].map(n => `<option value="${n}" ${n===P.cap?"selected":""}>${n} dish${n>1?"es":""}</option>`).join("")}</select></label>
       <label>Warming tray<select id="t-tray" data-set="trayCap" data-ev="${e.id}">${[0,1,2,3,4,5,6].map(n => `<option value="${n}" ${n===P.trayCap?"selected":""}>${n ? `${n} pan${n>1?"s":""}` : "None"}</option>`).join("")}</select></label></div></div>`;
-  html += `<div class="daywrap"><div class="dayof"><div class="dcol"><h2 class="dcolh">To-dos</h2>${left}${addForm}</div><div class="dcol oven"><h2 class="dcolh">Oven, crock pot &amp; stove</h2>${right}</div></div></div>`;
-  const mine = P.dishes.filter(d => !byOther(d)), untimed = mine.filter(d => !stepsOf(d) && !["Drinks"].includes(d.course||"")), brought = P.dishes.filter(d => byOther(d) && !P.cards.some(c => c.d.id === d.id) && !P.prep.some(p => p.d.id === d.id));
-  if (untimed.length) html += `<h2 class="eyebrow">Nothing to cook on the day</h2><p class="note">${untimed.map(d => esc(d.name)).join(", ")}. Made ahead, bought, or no timing set yet.</p>`;
-  if (brought.length) html += `<h2 class="eyebrow">Others have these</h2><p class="note">${brought.map(d => `${esc(d.name)} (${esc(d.who)})`).join(", ")}</p>`;
+  if (cookEvs.length > 1) html += `<div class="chips">${cookEvs.map(x => `<button class="chip" aria-pressed="${x.id===e.id}" data-act="dayev" data-id="${x.id}">${esc(x.short||x.name)}</button>`).join("")}</div>`;
+  html += `<div class="daywrap"><div class="dayof">${leftCol}<div class="dcol oven" data-keepscroll="r"><h2 class="dcolh">Oven, crock pot &amp; stove</h2>${right}</div></div></div>`;
+  const untimed = P.dishes.filter(x => !byOther(x) && !stepsOf(x) && !["Drinks"].includes(x.course||"")), brought = P.dishes.filter(x => byOther(x) && !P.cards.some(c => c.d.id === x.id) && !P.prep.some(p => p.d.id === x.id));
+  if (untimed.length) html += `<h2 class="eyebrow">Nothing to cook on the day</h2><p class="note">${untimed.map(x => esc(x.name)).join(", ")}. Made ahead, bought, or no timing set yet.</p>`;
+  if (brought.length) html += `<h2 class="eyebrow">Others have these</h2><p class="note">${brought.map(x => `${esc(x.name)} (${esc(x.who)})`).join(", ")}</p>`;
   return html + `<p class="note">The oven plan fits ${P.cap} dish${P.cap>1?"es":""} at a time at one temperature${P.trayCap ? `, with ${P.trayCap} pans on the warming tray` : ""}. Change a time above and everything shifts. Each timer runs on every screen that has this page open.</p>`;
 }
+const daysBetween = (a, b) => Math.round((pd(b) - pd(a)) / 864e5);
 const clock = ms => { if (ms <= 0) return "Done"; const s = Math.ceil(ms/1000), h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return h ? `${h}:${pad(m)}:${pad(x)}` : `${m}:${pad(x)}`; };
 /* Day-of timers tick on their own so the page doesn't redraw every second. Each device rings once when a timer it shows runs out. */
 const rung = new Set();
@@ -1147,8 +1172,11 @@ document.addEventListener("click", async ev => {
     case "task": { const x = S.tasks.find(t => t.id === id); if (x) w("tasks", id, {done:!x.done}); break; }
     case "dish": { const x = S.dishes.find(t => t.id === id); if (x) w("dishes", id, {ready:!x.ready}); break; }
     case "extra": { const x = S.extras.find(t => t.id === id); if (x) w("extras", id, {done:!x.done}); break; }
-    case "dchk": case "dtimer": case "dplus": { const [eid, k] = id.split("|"), doc = "day:" + eid, cur = S.checks[doc]; let data;
-      if (a === "dchk") { data = {[k]: !(cur && cur[k])}; if (/^x_c_/.test(k) && data[k]) data["tm_" + k.slice(4)] = 0; }
+    case "dayd": U.dayDate = id; U.armed = null; break;
+    case "dchk": case "dtimer": case "dplus": case "dhide": case "dunhide": { const [eid, k] = id.split("|"), doc = "day:" + eid, cur = S.checks[doc]; let data;
+      if (a === "dhide") data = {["h_" + k]: true};
+      else if (a === "dunhide") { data = {}; Object.keys(cur || {}).filter(x => /^h_/.test(x) && cur[x]).forEach(x => data[x] = false); if (!Object.keys(data).length) break; }
+      else if (a === "dchk") { data = {[k]: !(cur && cur[k])}; if (/^x_c_/.test(k) && data[k]) data["tm_" + k.slice(4)] = 0; }
       else { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch(e) {}
         const st = +((cur || {})["tm_" + k]) || 0; data = {["tm_" + k]: a === "dplus" ? (st ? st + 300000 : Date.now()) : (st ? 0 : Date.now())}; }
       if (cur) w("checks", doc, data); else w("checks", doc, data, "set"); break; }
@@ -1193,7 +1221,7 @@ document.addEventListener("submit", async e => {
   if (f === "listlink") { await w("lists", e.target.dataset.id, {link: v("#ll")}); toast("Link saved"); U.editList = false; }
   if (f === "list" && v("#nl")) { const name = v("#nl"); const id = await add("lists", {name, order:S.lists.length, createdAt:Date.now()}); if (id) { U.listId = id; ls.set("hph_list", id); } }
   if (f === "dinner") { const d = e.target.dataset.date, cur = S.dinners[d] || {}; const title = v("#dn-title"), recipe = v("#dn-recipe"); if (!title && !recipe) { await w("dinners", d, null, "delete"); } else await w("dinners", d, {...cur, title: title || R[recipe].title, recipe: recipe || recipeFor(title), note:v("#dn-note"), time:v("#dn-time"), link:v("#dn-link")}, "set"); U.editDinner = null; toast("Saved"); }
-  if (f === "daytodo" && v("#dtn")) { const ev = evById(e.target.dataset.ev); if (ev) { await add("tasks", {eventId:ev.id, title:v("#dtn"), date:ev.date, time:"", t:"", block:v("#dtb") || "morning", cat:"food", detail:"", recipe:recipeFor(v("#dtn")), who:"", done:false}); const i = $("#dtn"); if (i) { i.value = ""; i.focus(); } } return; }
+  if (f === "daytodo" && v("#dtn")) { const ev = evById(e.target.dataset.ev); if (ev) { await add("tasks", {eventId:ev.id, title:v("#dtn"), date:e.target.dataset.date || ev.date, time:"", t:"", block:v("#dtb") || "morning", cat:"food", detail:"", recipe:recipeFor(v("#dtn")), who:"", done:false}); const i = $("#dtn"); if (i) { i.value = ""; i.focus(); } } return; }
   if (f === "task" && v("#nt")) add("tasks", {eventId:v("#nte"), title:v("#nt"), date:v("#ntd") || evById(v("#nte")).date, time:v("#ntt"), t:to24(v("#ntt")), cat:v("#ntc") || "food", done:false});
   if (f === "dayadd" && v("#da-text") && U.add) { const d = e.target.dataset.date, text = v("#da-text"), tm = v("#da-time"), k = U.add.kind;
     if (k === "dinner") { const cur = S.dinners[d] || {}; await w("dinners", d, {...cur, title:text, recipe:recipeFor(text), note:cur.note || "", time:cur.time || "", link:cur.link || ""}, "set"); }

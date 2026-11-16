@@ -541,28 +541,29 @@
  },
  "Gravy": {
   "title": "Holiday Gravy",
-  "note": "Rich, glossy, and never without a splash of Gravy Master.",
+  "note": "A roux gravy, rich and glossy, and never without a splash of Gravy Master. The ratio is 2 tablespoons fat and 2 tablespoons flour for every cup of liquid, so halve everything for a 2-cup batch.",
   "meta": [
    "Makes: About 4 cups",
    "Prep: 5 min",
    "Cook: 15 min"
   ],
   "ingredients": [
-   "Pan drippings from the turducken or turkey",
-   "Butter, as needed (up to 1/4 cup)",
-   "1/4 cup all-purpose flour",
-   "4 cups turkey or chicken stock, warmed",
+   "## For the roux",
+   "1/2 cup fat skimmed from the pan drippings, made up with butter as needed",
+   "1/2 cup all-purpose flour",
+   "## To finish",
+   "4 cups turkey or chicken stock, warmed, plus the defatted drippings",
    "1–2 tsp Gravy Master",
    "Salt and black pepper, to taste",
    "1 sprig fresh thyme or sage (optional)"
   ],
   "steps": [
-   "Pour the pan drippings into a fat separator or measuring cup and let the fat rise to the top.",
-   "Spoon 1/4 cup of the fat into a saucepan over medium heat, adding butter to make up the difference.",
-   "Whisk in the flour and cook 2–3 minutes, until golden.",
-   "Slowly whisk in the warm stock, then the defatted drippings, until smooth. Add the herb sprig if using.",
-   "Simmer 5–10 minutes, whisking often, until it coats a spoon.",
-   "Stir in the Gravy Master, a teaspoon at a time, for deep color and flavor. Season with salt and pepper. Strain if you like it smooth."
+   "Pour the pan drippings into a fat separator or a measuring cup and let the fat rise to the top. For Pete's seafood-free gravy, use the strained juices from his crock pot instead, with its own pot and its own whisk.",
+   "Melt 1/2 cup of the fat in a saucepan over medium heat, topping it up with butter.",
+   "Whisk in the flour and keep whisking 2 to 3 minutes, until it smells nutty and turns light golden. That is the roux.",
+   "Slowly whisk in the warm stock and the defatted drippings, a cup at a time, so it stays smooth. Add the herb sprig if using.",
+   "Simmer 5 to 10 minutes, whisking often, until it coats a spoon. Too thick, splash in more stock. Too thin, simmer a little longer.",
+   "Stir in the Gravy Master a teaspoon at a time for color and depth. Season with salt and pepper, pull out the herb, and strain if you like it smooth."
   ]
  },
  "GreenBeans": {
